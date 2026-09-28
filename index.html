@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JN COS TECH CRM</title>
+  <meta name="description" content="JN COS TECH internal CRM dashboard prototype" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">JN</div>
+        <div>
+          <strong>JN COS TECH</strong>
+          <span>CRM</span>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Primary">
+        <a class="nav-item active" href="#dashboard" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a class="nav-item" href="#customers" data-view="customers"><i data-lucide="users"></i><span>Customers</span></a>
+        <a class="nav-item" href="#leads" data-view="leads"><i data-lucide="user-plus"></i><span>Leads</span></a>
+        <a class="nav-item" href="#projects" data-view="projects"><i data-lucide="folder-kanban"></i><span>Projects</span></a>
+        <a class="nav-item" href="#samples" data-view="samples"><i data-lucide="flask-conical"></i><span>Samples</span></a>
+        <a class="nav-item" href="#quotations" data-view="quotations"><i data-lucide="file-text"></i><span>Quotations</span></a>
+        <a class="nav-item" href="#orders" data-view="orders"><i data-lucide="shopping-cart"></i><span>Orders</span></a>
+        <a class="nav-item" href="#operations" data-view="operations"><i data-lucide="blocks"></i><span>Operations</span></a>
+        <a class="nav-item" href="#calendar" data-view="calendar"><i data-lucide="calendar-days"></i><span>Calendar</span></a>
+        <a class="nav-item" href="#settings" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="mini-card">
+          <span>JN COS TECH</span>
+          <strong>Better Beauty<br/>Together.</strong>
+          <small>Internal Workspace</small>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button mobile-only" id="menuButton" aria-label="Open menu"><i data-lucide="menu"></i></button>
+        <label class="search">
+          <i data-lucide="search"></i>
+          <input id="globalSearch" type="search" placeholder="Search customers, projects, orders..." />
+          <kbd>/</kbd>
+        </label>
+        <div class="top-actions">
+          <button class="icon-button notification-button" aria-label="Notifications">
+            <i data-lucide="bell"></i><span class="notification-dot">3</span>
+          </button>
+          <div class="user-chip">
+            <div class="avatar">RJ</div>
+            <div class="user-copy">
+              <strong>Ravi Kim</strong>
+              <span>Sales Team</span>
+            </div>
+            <i data-lucide="chevron-down"></i>
+          </div>
+        </div>
+      </header>
+
+      <section class="page" id="pageRoot">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">JN COS TECH CRM</p>
+            <h1>Good morning, Ravi.</h1>
+            <p>Review what needs attention and continue today's work.</p>
+          </div>
+          <button class="primary-button" id="quickAdd"><i data-lucide="plus"></i> Quick Add</button>
+        </div>
+
+        <div class="stat-grid">
+          <article class="stat-card"><div class="stat-icon blue"><i data-lucide="user-plus"></i></div><div><span>New Leads</span><strong>12</strong><small class="positive">↑ 20% this week</small></div></article>
+          <article class="stat-card"><div class="stat-icon green"><i data-lucide="folder-kanban"></i></div><div><span>Active Projects</span><strong>23</strong><small class="positive">↑ 15% active</small></div></article>
+          <article class="stat-card"><div class="stat-icon violet"><i data-lucide="flask-conical"></i></div><div><span>Sample Feedback</span><strong>7</strong><small class="muted">Waiting</small></div></article>
+          <article class="stat-card"><div class="stat-icon orange"><i data-lucide="badge-check"></i></div><div><span>Approval Pending</span><strong>5</strong><small class="muted">Need review</small></div></article>
+          <article class="stat-card"><div class="stat-icon teal"><i data-lucide="shopping-cart"></i></div><div><span>Active Orders</span><strong>14</strong><small class="positive">↑ 8% active</small></div></article>
+          <article class="stat-card"><div class="stat-icon sky"><i data-lucide="truck"></i></div><div><span>Ready to Dispatch</span><strong>6</strong><small class="positive">2 due today</small></div></article>
+          <article class="stat-card"><div class="stat-icon red"><i data-lucide="credit-card"></i></div><div><span>Payment Overdue</span><strong>4</strong><small class="negative">Needs action</small></div></article>
+          <article class="stat-card"><div class="stat-icon navy"><i data-lucide="bar-chart-3"></i></div><div><span>Total Revenue</span><strong>$128,500</strong><small class="positive">↑ 18% this month</small></div></article>
+        </div>
+
+        <div class="dashboard-grid">
+          <section class="panel schedule-panel">
+            <div class="panel-head"><div><i data-lucide="calendar-clock"></i><h2>Today's Schedule</h2></div><button>View all</button></div>
+            <div class="timeline">
+              <div class="timeline-item"><time>10:00</time><span class="dot blue-dot"></span><div><strong>ABC Cosmetics · Follow-up</strong><p>Online meeting</p></div><i data-lucide="chevron-right"></i></div>
+              <div class="timeline-item"><time>13:30</time><span class="dot green-dot"></span><div><strong>XY Labs · Sample Feedback</strong><p>Review Sample V2 feedback</p></div><i data-lucide="chevron-right"></i></div>
+              <div class="timeline-item"><time>15:00</time><span class="dot orange-dot"></span><div><strong>PRJ-021 · Artwork Approval</strong><p>Final design approval</p></div><i data-lucide="chevron-right"></i></div>
+              <div class="timeline-item"><time>17:00</time><span class="dot violet-dot"></span><div><strong>ORD-102 · Dispatch</strong><p>Confirm shipping documents</p></div><i data-lucide="chevron-right"></i></div>
+            </div>
+          </section>
+
+          <section class="panel projects-panel">
+            <div class="panel-head"><div><i data-lucide="folder-kanban"></i><h2>Projects Requiring Attention</h2></div><button>View all</button></div>
+            <div class="attention-list">
+              <div class="attention-item"><span>PRJ-021</span><div><strong>ABC Cosmetics</strong><p>Hyaluronic Acid Serum</p></div><em class="badge warning">Sample Feedback</em><small>4 days overdue</small></div>
+              <div class="attention-item"><span>PRJ-019</span><div><strong>XYZ Beauty</strong><p>Vitamin C Cream</p></div><em class="badge warning">Artwork Approval</em><small>2 days overdue</small></div>
+              <div class="attention-item"><span>PRJ-018</span><div><strong>Glow Skincare</strong><p>Sun Care Lotion</p></div><em class="badge info">In Development</em><small>On track</small></div>
+              <div class="attention-item"><span>PRJ-017</span><div><strong>Nature Republic</strong><p>Cleansing Oil</p></div><em class="badge danger">Formula Review</em><small>1 day overdue</small></div>
+              <div class="attention-item"><span>PRJ-016</span><div><strong>Pure Beauty</strong><p>Collagen Mask</p></div><em class="badge info">Sample Production</em><small>On track</small></div>
+            </div>
+          </section>
+
+          <section class="panel activity-panel">
+            <div class="panel-head"><div><i data-lucide="history"></i><h2>Recent Activity</h2></div><button>View all</button></div>
+            <div class="activity-list">
+              <div><span class="activity-icon violet"><i data-lucide="flask-conical"></i></span><p><strong>Sample V3 uploaded</strong><small>PRJ-021 / ABC Cosmetics · 2h ago</small></p></div>
+              <div><span class="activity-icon green"><i data-lucide="message-circle"></i></span><p><strong>Customer feedback received</strong><small>PRJ-019 / XYZ Beauty · 4h ago</small></p></div>
+              <div><span class="activity-icon sky"><i data-lucide="badge-check"></i></span><p><strong>Artwork V2 approved</strong><small>PRJ-018 / Glow Skincare · 6h ago</small></p></div>
+              <div><span class="activity-icon teal"><i data-lucide="file-text"></i></span><p><strong>Quotation QT-015 sent</strong><small>ABC Cosmetics · 1d ago</small></p></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="analytics-grid">
+          <section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="pie-chart"></i><h2>Project Status</h2></div></div><canvas id="projectChart" height="180"></canvas></section>
+          <section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="bar-chart-3"></i><h2>Orders & Production</h2></div></div><canvas id="orderChart" height="180"></canvas></section>
+          <section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="circle-dollar-sign"></i><h2>Payment Status</h2></div></div><canvas id="paymentChart" height="180"></canvas></section>
+        </div>
+
+        <section class="panel table-panel">
+          <div class="panel-head"><div><i data-lucide="user-plus"></i><h2>Recent Leads</h2></div><button>View all</button></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Company</th><th>Contact</th><th>Country</th><th>Type</th><th>Source</th><th>Status</th><th>Owner</th></tr></thead>
+              <tbody>
+                <tr><td>2026-09-29</td><td>Beauty Global</td><td>Sarah Lee</td><td>USA</td><td>OEM</td><td>Website</td><td><span class="badge info">New</span></td><td>Ravi Kim</td></tr>
+                <tr><td>2026-09-28</td><td>Pure Life</td><td>Michael Chen</td><td>Canada</td><td>Private Label</td><td>Exhibition</td><td><span class="badge info">Contacted</span></td><td>Jisoo Park</td></tr>
+                <tr><td>2026-09-27</td><td>Nature Care</td><td>Emma Wilson</td><td>UK</td><td>ODM</td><td>Email</td><td><span class="badge violet-badge">Qualified</span></td><td>Minho Lee</td></tr>
+                <tr><td>2026-09-26</td><td>Glow Lab</td><td>David Kim</td><td>Australia</td><td>Distributor</td><td>WhatsApp</td><td><span class="badge success">Project</span></td><td>Sarah Choi</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="quickModal">
+    <div class="modal">
+      <button class="modal-close" id="closeModal"><i data-lucide="x"></i></button>
+      <p class="eyebrow">Create</p>
+      <h2>Quick Add</h2>
+      <div class="quick-grid">
+        <button><i data-lucide="user-plus"></i><span>New Lead</span></button>
+        <button><i data-lucide="users"></i><span>Customer</span></button>
+        <button><i data-lucide="folder-plus"></i><span>Project</span></button>
+        <button><i data-lucide="flask-conical"></i><span>Sample</span></button>
+        <button><i data-lucide="file-plus-2"></i><span>Quotation</span></button>
+        <button><i data-lucide="shopping-cart"></i><span>Order</span></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
