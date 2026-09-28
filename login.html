@@ -25,27 +25,55 @@
     </section>
 
     <section class="login-form-panel">
-      <form class="login-card" action="./index.html">
+      <form class="login-card" id="loginForm">
         <p class="eyebrow">WELCOME BACK</p>
         <h2>Sign in to CRM</h2>
         <p class="login-help">Use your company account to continue.</p>
 
         <label>Email
-          <input type="email" placeholder="name@jncostech.com" required />
+          <input id="loginEmail" type="email" placeholder="name@jncostech.com" required />
         </label>
         <label>Password
-          <input type="password" placeholder="Enter your password" required />
+          <input id="loginPassword" type="password" placeholder="Enter your password" required minlength="4" />
         </label>
 
         <div class="login-row">
-          <label class="remember"><input type="checkbox" /> Remember me</label>
-          <a href="#">Forgot password?</a>
+          <label class="remember"><input type="checkbox" checked /> Remember me</label>
+          <a href="#" id="forgotLink">Forgot password?</a>
         </div>
 
         <button class="primary-button full" type="submit">Sign in</button>
-        <p class="login-note">Prototype login only. Authentication will be connected in the next backend phase.</p>
+        <p class="form-error hidden" id="loginError"></p>
+        <p class="login-note">Phase 1 local authentication. Firebase / Supabase authentication can replace this without changing the UI flow.</p>
       </form>
     </section>
   </main>
+
+  <script src="./crm-store.js"></script>
+  <script>
+    const existing = CRMStore.getSession();
+    if (existing) location.replace('./index.html');
+
+    const form = document.getElementById('loginForm');
+    const error = document.getElementById('loginError');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      if (!email || password.length < 4) {
+        error.textContent = 'Please enter a valid email and password.';
+        error.classList.remove('hidden');
+        return;
+      }
+      CRMStore.setSession(email);
+      location.replace('./index.html#dashboard');
+    });
+
+    document.getElementById('forgotLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      error.textContent = 'Password reset will be connected with the production authentication service.';
+      error.classList.remove('hidden');
+    });
+  </script>
 </body>
 </html>
