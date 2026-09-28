@@ -68,10 +68,16 @@ Lead / Enquiry
 ### Projects
 - Create / edit / delete
 - Customer relation
-- Product brief
 - Sales and R&D owners
 - Project status
-- Formula / packaging / artwork / approval status overview
+- Detailed tabbed project workspace
+- Product Brief structured fields
+- Formula version / owner / status / approval date / notes
+- Packaging specification / supplier / compatibility
+- Artwork version / approval status / notes
+- Approval records with approver, date and comments
+- Document references
+- Project activity history
 - Linked samples, quotations and orders
 
 ### Samples
@@ -83,24 +89,32 @@ Lead / Enquiry
 - Customer feedback
 
 ### Quotations
-- Create / delete
+- Create / edit / delete
 - Project relation
-- Version, MOQ, unit price, terms and validity
+- Version, MOQ, unit price, terms, lead time and validity
 - Commercial status
+- Accepted Quotation → Order conversion
+- Duplicate order conversion prevention
 
 ### Orders
-- Create / delete
+- Create / edit / delete
 - Project and customer relation
+- Quotation reference
 - PO / quantity / committed date
 - Readiness
 - Production status
+- QC status
+- Dispatch status / tracking
 - Payment status
+- Operations notes
 
 ### Operations
 - Production visibility
 - QC status
 - Dispatch status
 - Per-order progress view
+- Direct status update control from Operations
+- Operations notes and committed dates
 
 ### Calendar
 - Lead follow-ups
@@ -153,3 +167,18 @@ or an equivalent Supabase/PostgreSQL implementation.
 ## Phase 1 scope note
 
 This CRM should remain an operational workflow system rather than a full ERP. Full inventory valuation, detailed factory records, accounting replacement, WhatsApp API, courier API and advanced analytics should be handled as later integrations.
+
+
+## Latest workflow milestone
+
+The core Phase 1 workflow is now interactive through:
+
+`Lead → Customer / Project → Product Brief → Formula / Packaging / Artwork / Approval → Sample → Quotation → Accepted Quote → Order → Production / QC / Dispatch`
+
+The next implementation milestone is the shared backend:
+
+- production authentication
+- shared database
+- cloud file storage
+- real role permissions
+- website enquiry integration
