@@ -63,8 +63,19 @@
     if (action === 'new-sample') openSampleForm(button.dataset.projectId || '');
     if (action === 'edit-sample') openSampleForm('', id);
     if (action === 'delete-record' && collection) deleteRecord(collection, id, collection.slice(0,-1));
-    if (action === 'new-quotation') openQuotationForm();
+    if (action === 'new-quotation') openQuotationForm(button.dataset.projectId || '');
+    if (action === 'edit-quotation') openQuotationForm('', id);
+    if (action === 'convert-quotation') convertQuotationToOrder(id);
     if (action === 'new-order') openOrderForm();
+    if (action === 'edit-order') openOrderForm('', id);
+    if (action === 'edit-operation') openOrderForm('', id, 'operations');
+    if (action === 'edit-project-brief') openProjectBriefForm(id);
+    if (action === 'edit-project-formula') openProjectFormulaForm(id);
+    if (action === 'edit-project-packaging') openProjectPackagingForm(id);
+    if (action === 'edit-project-artwork') openProjectArtworkForm(id);
+    if (action === 'edit-project-approval') openProjectApprovalForm(id);
+    if (action === 'edit-project-documents') openProjectDocumentsForm(id);
+    if (action === 'project-tab') switchProjectTab(button.dataset.tab || 'overview');
     if (action === 'reset-data') {
       if (confirm('Reset all local CRM demo data?')) {
         CRMStore.reset();
@@ -511,24 +522,195 @@
     });
   }
 
-  function renderProjectDetail(id) {
+  
+function renderProjectDetail(id) {
     const p = CRMStore.get('projects', id);
     if (!p) { pageRoot.innerHTML = pageHeading('Project not found','The requested project record does not exist.',''); return; }
     const samples = CRMStore.list('samples').filter(s => s.projectId === id);
     const quotes = CRMStore.list('quotations').filter(q => q.projectId === id);
     const orders = CRMStore.list('orders').filter(o => o.projectId === id);
+    const activities = CRMStore.list('activities').filter(a => String(a.meta || '').includes(id)).slice(0,20);
+
+    const documentRows = String(p.documents || '').split('\n').map(x => x.trim()).filter(Boolean).map(line =>
+      '<div class="document-row"><i data-lucide="paperclip"></i><span>' + esc(line) + '</span></div>'
+    ).join('');
 
     pageRoot.innerHTML =
       '<div class="detail-header"><div><a class="back-link" href="#projects"><i data-lucide="arrow-left"></i> Projects</a><p class="eyebrow">OEM / ODM PROJECT</p><h1>' + esc(p.name) + '</h1><p>' + esc(p.id) + ' · ' + esc(getCustomerName(p.customerId)) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-project" data-id="' + esc(p.id) + '">Edit Project</button><button class="primary-button" data-action="new-sample" data-project-id="' + esc(p.id) + '"><i data-lucide="plus"></i> Add Sample</button></div></div>' +
       '<div class="project-status-bar"><div><span>Project Status</span>' + badge(p.status) + '</div><div><span>Formula</span>' + badge(p.formulaStatus) + '</div><div><span>Packaging</span>' + badge(p.packagingStatus) + '</div><div><span>Artwork</span>' + badge(p.artworkStatus) + '</div><div><span>Approval</span>' + badge(p.approvalStatus) + '</div></div>' +
-      '<div class="record-grid">' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="notebook-text"></i><h2>Product Brief</h2></div></div><p class="body-copy">' + esc(p.brief || 'No brief entered.') + '</p><div class="detail-grid compact">' + detailItem('Category',p.category) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) + detailItem('Target Date',p.targetDate) + detailItem('Sales Owner',p.salesOwner) + detailItem('R&D Owner',p.rdOwner) + '</div></section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="flask-conical"></i><h2>Samples</h2></div><span class="count-pill">' + samples.length + '</span></div>' + (samples.map(s => '<div class="record-row"><div><strong>' + esc(s.id) + '</strong><span>' + esc(s.createdDate) + ' · ' + esc(s.rdOwner) + '</span></div>' + badge(s.status) + '</div>').join('') || '<p class="empty-text">No samples yet.</p>') + '</section>' +
+      '<div class="project-tabs" id="projectTabs">' +
+        projectTabButton('overview','Overview',true) +
+        projectTabButton('brief','Product Brief') +
+        projectTabButton('formula','Formula') +
+        projectTabButton('packaging','Packaging') +
+        projectTabButton('artwork','Artwork') +
+        projectTabButton('approval','Approval') +
+        projectTabButton('documents','Documents') +
+        projectTabButton('activity','Activity') +
       '</div>' +
-      '<div class="record-grid">' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="file-text"></i><h2>Quotations</h2></div><button data-action="new-quotation">New</button></div>' + (quotes.map(q => '<div class="record-row"><div><strong>' + esc(q.id) + ' · ' + esc(q.version) + '</strong><span>' + esc(q.unitPrice) + ' / MOQ ' + esc(q.moq) + '</span></div>' + badge(q.status) + '</div>').join('') || '<p class="empty-text">No quotations.</p>') + '</section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="shopping-cart"></i><h2>Orders</h2></div></div>' + (orders.map(o => '<div class="record-row"><div><strong>' + esc(o.id) + '</strong><span>' + esc(o.quantity) + ' units · ' + esc(o.committedDate) + '</span></div>' + badge(o.productionStatus) + '</div>').join('') || '<p class="empty-text">No orders.</p>') + '</section>' +
+      '<div class="project-tab-panels">' +
+        '<section class="project-tab-panel active" data-project-panel="overview">' +
+          '<div class="record-grid">' +
+            '<section class="panel"><div class="panel-head"><div><i data-lucide="circle-user-round"></i><h2>Project Overview</h2></div></div><div class="detail-grid compact">' +
+              detailItem('Customer',getCustomerName(p.customerId)) + detailItem('Category',p.category) + detailItem('Sales Owner',p.salesOwner) + detailItem('R&D Owner',p.rdOwner) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) + detailItem('Target Date',p.targetDate) + detailItem('Last Updated',fmtDate(p.updatedAt)) +
+            '</div></section>' +
+            '<section class="panel"><div class="panel-head"><div><i data-lucide="layers-3"></i><h2>Linked Records</h2></div></div><div class="metric-list"><div><span>Samples</span><strong>' + samples.length + '</strong></div><div><span>Quotations</span><strong>' + quotes.length + '</strong></div><div><span>Orders</span><strong>' + orders.length + '</strong></div></div></section>' +
+          '</div>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="brief">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="notebook-text"></i><h2>Product Brief</h2></div><button data-action="edit-project-brief" data-id="' + esc(p.id) + '">Edit</button></div>' +
+          '<p class="body-copy">' + esc(p.brief || 'No product brief entered.') + '</p>' +
+          '<div class="detail-grid compact project-detail-grid">' +
+            detailItem('Concept',p.concept) + detailItem('Claims',p.claims) + detailItem('Target Consumer',p.targetConsumer) + detailItem('Benchmark',p.benchmark) +
+            detailItem('Texture',p.texture) + detailItem('Fragrance',p.fragrance) + detailItem('Requested Actives',p.requestedActives) + detailItem('Excluded Ingredients',p.excludedIngredients) +
+            detailItem('Target Launch',p.launchDate) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) +
+          '</div></section>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="formula">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="flask-conical"></i><h2>Formula Control</h2></div><button data-action="edit-project-formula" data-id="' + esc(p.id) + '">Edit</button></div>' +
+          '<div class="detail-grid compact project-detail-grid">' +
+            detailItem('Formula Version',p.formulaVersion) + detailItem('Status',p.formulaStatus) + detailItem('R&D Owner',p.formulaOwner || p.rdOwner) + detailItem('Approval Date',p.formulaApprovalDate) +
+          '</div><p class="body-copy section-note">' + esc(p.formulaComments || 'No formula notes.') + '</p></section>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="packaging">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="package"></i><h2>Packaging Specification</h2></div><button data-action="edit-project-packaging" data-id="' + esc(p.id) + '">Edit</button></div>' +
+          '<div class="detail-grid compact project-detail-grid">' +
+            detailItem('Type',p.packagingType) + detailItem('Capacity',p.packagingCapacity) + detailItem('Material',p.packagingMaterial) + detailItem('Colour',p.packagingColor) +
+            detailItem('Component',p.packagingComponent) + detailItem('Supplier',p.packagingSupplier) + detailItem('Sample Status',p.packagingStatus) + detailItem('Compatibility',p.compatibilityStatus) +
+          '</div></section>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="artwork">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="pen-tool"></i><h2>Artwork Control</h2></div><button data-action="edit-project-artwork" data-id="' + esc(p.id) + '">Edit</button></div>' +
+          '<div class="detail-grid compact project-detail-grid">' +
+            detailItem('Artwork Version',p.artworkVersion) + detailItem('Status',p.artworkStatus) + detailItem('Owner',p.artworkOwner) + detailItem('Approval Date',p.artworkApprovalDate) +
+          '</div><p class="body-copy section-note">' + esc(p.artworkNotes || 'No artwork notes.') + '</p></section>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="approval">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="badge-check"></i><h2>Approval Record</h2></div><button data-action="edit-project-approval" data-id="' + esc(p.id) + '">Edit</button></div>' +
+          '<div class="approval-card"><div>' + badge(p.approvalStatus) + '<h3>' + esc(p.approvalType || 'Project Approval') + '</h3><p>' + esc(p.approvalComment || 'No approval comment.') + '</p></div><div class="detail-grid compact">' + detailItem('Approved / Reviewed By',p.approvalBy) + detailItem('Approval Date',p.approvalDate) + '</div></div></section>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="documents">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="folder-open"></i><h2>Project Documents</h2></div><button data-action="edit-project-documents" data-id="' + esc(p.id) + '">Manage</button></div>' +
+          '<div class="document-list">' + (documentRows || '<p class="empty-text">No document references added.</p>') + '</div><p class="helper-text">Phase 1 stores document references. Production file upload will be connected to cloud storage.</p></section>' +
+        '</section>' +
+
+        '<section class="project-tab-panel" data-project-panel="activity">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="history"></i><h2>Project Activity</h2></div></div><div class="activity-list">' +
+          (activities.map(a => '<div><span class="activity-icon sky"><i data-lucide="history"></i></span><p><strong>' + esc(a.text) + '</strong><small>' + esc(a.meta) + ' · ' + fmtDate(a.createdAt) + '</small></p></div>').join('') || '<p class="empty-text">No project activity yet.</p>') +
+          '</div></section>' +
+        '</section>' +
+      '</div>' +
+      '<div class="record-grid project-related-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="flask-conical"></i><h2>Samples</h2></div><button data-action="new-sample" data-project-id="' + esc(p.id) + '">New</button></div>' + (samples.map(s => '<div class="record-row"><div><strong>' + esc(s.id) + '</strong><span>' + esc(s.createdDate) + ' · ' + esc(s.rdOwner) + '</span></div>' + badge(s.status) + '</div>').join('') || '<p class="empty-text">No samples yet.</p>') + '</section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="file-text"></i><h2>Quotations / Orders</h2></div><button data-action="new-quotation" data-project-id="' + esc(p.id) + '">New Quote</button></div>' +
+        (quotes.map(q => '<div class="record-row"><div><strong>' + esc(q.id) + ' · ' + esc(q.version) + '</strong><span>' + esc(q.unitPrice) + ' / MOQ ' + esc(q.moq) + '</span></div>' + badge(q.status) + '</div>').join('') || '<p class="empty-text">No quotations.</p>') +
+        (orders.map(o => '<div class="record-row"><div><strong>' + esc(o.id) + '</strong><span>' + esc(o.quantity) + ' units · ' + esc(o.committedDate) + '</span></div>' + badge(o.productionStatus) + '</div>').join('')) +
+        '</section>' +
       '</div>';
+  }
+
+  function projectTabButton(tab,label,active) {
+    return '<button class="project-tab-button ' + (active ? 'active' : '') + '" data-action="project-tab" data-tab="' + esc(tab) + '">' + esc(label) + '</button>';
+  }
+
+  function switchProjectTab(tab) {
+    document.querySelectorAll('.project-tab-button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.querySelectorAll('.project-tab-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.projectPanel === tab));
+  }
+
+  function openProjectBriefForm(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) return;
+    const fields =
+      textAreaField('Product Brief','brief',p.brief,true) +
+      inputField('Concept','concept',p.concept,'text',false) +
+      inputField('Claims','claims',p.claims,'text',false) +
+      inputField('Target Consumer','targetConsumer',p.targetConsumer,'text',false) +
+      inputField('Benchmark','benchmark',p.benchmark,'text',false) +
+      inputField('Texture','texture',p.texture,'text',false) +
+      inputField('Fragrance','fragrance',p.fragrance,'text',false) +
+      inputField('Requested Active Ingredients','requestedActives',p.requestedActives,'text',false,true) +
+      inputField('Excluded Ingredients','excludedIngredients',p.excludedIngredients,'text',false,true) +
+      inputField('Target Launch Date','launchDate',p.launchDate,'date',false) +
+      inputField('MOQ','moq',p.moq,'text',false) +
+      inputField('Target Price','targetPrice',p.targetPrice,'text',false);
+    modalForm('Product Brief','Maintain the structured customer product brief.',fields,'Save Brief',data => {
+      CRMStore.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
+    });
+  }
+
+  function openProjectFormulaForm(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) return;
+    const fields =
+      inputField('Formula Version','formulaVersion',p.formulaVersion || 'V1','text',true) +
+      selectField('Formula Status','formulaStatus',p.formulaStatus || 'Not Started',['Not Started','Development','Sample Ready','Pending Feedback','Approved','Rejected','On Hold'],true) +
+      inputField('R&D Owner','formulaOwner',p.formulaOwner || p.rdOwner,'text',false) +
+      inputField('Approval Date','formulaApprovalDate',p.formulaApprovalDate,'date',false) +
+      textAreaField('Formula Notes','formulaComments',p.formulaComments,true);
+    modalForm('Formula Control','Track formula version, status and approval record.',fields,'Save Formula',data => {
+      CRMStore.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
+    });
+  }
+
+  function openProjectPackagingForm(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) return;
+    const fields =
+      inputField('Packaging Type','packagingType',p.packagingType,'text',false) +
+      inputField('Capacity','packagingCapacity',p.packagingCapacity,'text',false) +
+      inputField('Material','packagingMaterial',p.packagingMaterial,'text',false) +
+      inputField('Colour','packagingColor',p.packagingColor,'text',false) +
+      inputField('Pump / Dropper / Cap','packagingComponent',p.packagingComponent,'text',false) +
+      inputField('Supplier','packagingSupplier',p.packagingSupplier,'text',false) +
+      selectField('Sample / Procurement Status','packagingStatus',p.packagingStatus || 'Not Started',['Not Started','Searching','Sample Requested','Sample Received','Compatibility Check','Sample Approved','Approved','Rejected'],true) +
+      selectField('Compatibility Status','compatibilityStatus',p.compatibilityStatus || 'Not Tested',['Not Tested','Testing','Passed','Failed','Hold'],true);
+    modalForm('Packaging Specification','Track the primary pack and compatibility status.',fields,'Save Packaging',data => {
+      CRMStore.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
+    });
+  }
+
+  function openProjectArtworkForm(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) return;
+    const fields =
+      inputField('Artwork Version','artworkVersion',p.artworkVersion || 'V1','text',true) +
+      selectField('Artwork Status','artworkStatus',p.artworkStatus || 'Not Started',['Not Started','Draft','V1 Review','V2 Review','Internal Approval','Customer Approval','FINAL APPROVED','Rejected'],true) +
+      inputField('Artwork Owner','artworkOwner',p.artworkOwner,'text',false) +
+      inputField('Approval Date','artworkApprovalDate',p.artworkApprovalDate,'date',false) +
+      textAreaField('Artwork Notes','artworkNotes',p.artworkNotes,true);
+    modalForm('Artwork Control','Keep artwork versions and the final approved state visible.',fields,'Save Artwork',data => {
+      CRMStore.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
+    });
+  }
+
+  function openProjectApprovalForm(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) return;
+    const fields =
+      selectField('Approval Type','approvalType',p.approvalType || 'Project Approval',['Formula Approval','Sample Approval','Artwork Approval','Commercial Approval','Project Approval'],true) +
+      selectField('Approval Status','approvalStatus',p.approvalStatus || 'Pending',['Pending','Approved','Rejected','Revision Requested','On Hold'],true) +
+      inputField('Approved / Reviewed By','approvalBy',p.approvalBy,'text',false) +
+      inputField('Approval Date','approvalDate',p.approvalDate,'date',false) +
+      textAreaField('Approval Comment','approvalComment',p.approvalComment,true);
+    modalForm('Approval Record','Record who approved or rejected the current project gate.',fields,'Save Approval',data => {
+      CRMStore.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
+    });
+  }
+
+  function openProjectDocumentsForm(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) return;
+    const fields = textAreaField('Document References','documents',p.documents,true);
+    modalForm('Project Documents','Add one file name, Drive link or document reference per line.',fields,'Save Documents',data => {
+      CRMStore.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
+    });
   }
 
   function renderSamples() {
@@ -570,73 +752,134 @@
     });
   }
 
-  function renderQuotations() {
+  
+function renderQuotations() {
     const quotes = CRMStore.list('quotations');
-    const rows = quotes.map(q =>
-      '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.projectId) + '<small class="cell-sub">' + esc(getProjectName(q.projectId)) + '</small></td><td>' + esc(q.version) + '</td><td>' + esc(q.moq) + '</td><td>' + esc(q.unitPrice) + '</td><td>' + esc(q.paymentTerms) + '</td><td>' + esc(q.validUntil) + '</td><td>' + badge(q.status) + '</td><td class="actions-cell"><button class="row-action danger-action" data-action="delete-record" data-collection="quotations" data-id="' + esc(q.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
-    ).join('');
-    pageRoot.innerHTML = pageHeading('Quotations','Manage quotation versions and commercial status.','<button class="primary-button" data-action="new-quotation"><i data-lucide="plus"></i> New Quotation</button>') +
+    const orders = CRMStore.list('orders');
+    const rows = quotes.map(q => {
+      const converted = orders.some(o => o.quoteId === q.id);
+      const convertButton = q.status === 'Accepted' && !converted
+        ? '<button class="row-action success-action" title="Convert to Order" data-action="convert-quotation" data-id="' + esc(q.id) + '"><i data-lucide="shopping-cart"></i></button>'
+        : (converted ? '<span class="converted-label">Order created</span>' : '');
+      return '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.projectId) + '<small class="cell-sub">' + esc(getProjectName(q.projectId)) + '</small></td><td>' + esc(q.version) + '</td><td>' + esc(q.moq) + '</td><td>' + esc(q.unitPrice) + '</td><td>' + esc(q.paymentTerms) + '</td><td>' + esc(q.validUntil) + '</td><td>' + badge(q.status) + '</td><td class="actions-cell">' + convertButton + '<button class="row-action" data-action="edit-quotation" data-id="' + esc(q.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-record" data-collection="quotations" data-id="' + esc(q.id) + '"><i data-lucide="trash-2"></i></button></td></tr>';
+    }).join('');
+    pageRoot.innerHTML = pageHeading('Quotations','Manage versions, approvals and convert accepted quotations into orders.','<button class="primary-button" data-action="new-quotation"><i data-lucide="plus"></i> New Quotation</button>') +
       tableShell(['Quote','Project','Version','MOQ','Unit Price','Terms','Valid Until','Status',''], rows, 'No quotations yet.');
   }
 
-  function openQuotationForm() {
+  function openQuotationForm(projectId, quotationId) {
+    const q = quotationId ? CRMStore.get('quotations', quotationId) : {};
     const projects = CRMStore.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
+    const selected = q.projectId ? q.projectId + ' | ' + getProjectName(q.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
     const fields =
-      selectField('Project','projectOption',options[0] || '',options,true) +
-      inputField('Version','version','V1','text',true) +
-      inputField('MOQ','moq','','text',true) +
-      inputField('Unit Price','unitPrice','','text',true) +
-      inputField('Payment Terms','paymentTerms','50/50','text',false) +
-      inputField('Valid Until','validUntil','','date',false) +
-      selectField('Status','status','Draft',['Draft','Sent','Revision','Accepted','Rejected','Expired'],true) +
-      textAreaField('Notes','notes','',true);
-    modalForm('New Quotation','Create a commercial quotation linked to a project.',fields,'Create Quotation',data => {
+      selectField('Project','projectOption',selected,options,true) +
+      inputField('Version','version',q.version || 'V1','text',true) +
+      inputField('MOQ','moq',q.moq,'text',true) +
+      inputField('Unit Price','unitPrice',q.unitPrice,'text',true) +
+      inputField('Packaging / Other Charges','otherCharges',q.otherCharges,'text',false) +
+      inputField('Payment Terms','paymentTerms',q.paymentTerms || '50/50','text',false) +
+      inputField('Lead Time','leadTime',q.leadTime,'text',false) +
+      inputField('Valid Until','validUntil',q.validUntil,'date',false) +
+      selectField('Status','status',q.status || 'Draft',['Draft','Sent','Revision','Accepted','Rejected','Expired'],true) +
+      textAreaField('Notes','notes',q.notes,true);
+    modalForm(quotationId ? 'Edit Quotation' : 'New Quotation','Accepted quotations can be converted directly into orders.',fields,quotationId ? 'Save Changes' : 'Create Quotation',data => {
       data.projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      CRMStore.create('quotations', data); closeModal(); toast('Quotation created.'); renderRoute();
+      quotationId ? CRMStore.update('quotations', quotationId, data) : CRMStore.create('quotations', data);
+      closeModal(); toast(quotationId ? 'Quotation updated.' : 'Quotation created.'); renderRoute();
     });
   }
 
-  function renderOrders() {
+  function convertQuotationToOrder(id) {
+    const q = CRMStore.get('quotations', id);
+    if (!q) return;
+    if (q.status !== 'Accepted') {
+      toast('Only accepted quotations can be converted.');
+      return;
+    }
+    if (CRMStore.list('orders').some(o => o.quoteId === id)) {
+      toast('An order already exists for this quotation.');
+      return;
+    }
+    const project = CRMStore.get('projects', q.projectId);
+    if (!project) return;
+    const order = CRMStore.create('orders', {
+      quoteId:q.id,
+      customerId:project.customerId,
+      projectId:project.id,
+      po:'',
+      quantity:q.moq || '',
+      orderDate:new Date().toISOString().slice(0,10),
+      committedDate:'',
+      paymentStatus:'Pending',
+      total:'',
+      advance:'',
+      balance:'',
+      paymentDue:'',
+      readiness:'Not Ready',
+      productionStatus:'Planned',
+      qcStatus:'Waiting',
+      dispatchStatus:'Not Ready'
+    });
+    toast('Order ' + order.id + ' created from ' + q.id + '.');
+    location.hash = '#orders';
+  }
+
+  
+function renderOrders() {
     const orders = CRMStore.list('orders');
     const rows = orders.map(o =>
-      '<tr><td><strong>' + esc(o.id) + '</strong><small class="cell-sub">' + esc(o.po) + '</small></td><td>' + esc(getCustomerName(o.customerId)) + '</td><td>' + esc(getProjectName(o.projectId)) + '</td><td>' + esc(o.quantity) + '</td><td>' + esc(o.committedDate) + '</td><td>' + badge(o.readiness) + '</td><td>' + badge(o.productionStatus) + '</td><td>' + badge(o.paymentStatus) + '</td><td class="actions-cell"><button class="row-action danger-action" data-action="delete-record" data-collection="orders" data-id="' + esc(o.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+      '<tr><td><strong>' + esc(o.id) + '</strong><small class="cell-sub">' + esc(o.po || 'No PO') + (o.quoteId ? ' · ' + esc(o.quoteId) : '') + '</small></td><td>' + esc(getCustomerName(o.customerId)) + '</td><td>' + esc(getProjectName(o.projectId)) + '</td><td>' + esc(o.quantity) + '</td><td>' + esc(o.committedDate || '—') + '</td><td>' + badge(o.readiness) + '</td><td>' + badge(o.productionStatus) + '</td><td>' + badge(o.qcStatus) + '</td><td>' + badge(o.dispatchStatus) + '</td><td>' + badge(o.paymentStatus) + '</td><td class="actions-cell"><button class="row-action" data-action="edit-order" data-id="' + esc(o.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-record" data-collection="orders" data-id="' + esc(o.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
     ).join('');
-    pageRoot.innerHTML = pageHeading('Orders','Track PO, readiness, production and payment status.','<button class="primary-button" data-action="new-order"><i data-lucide="plus"></i> New Order</button>') +
-      tableShell(['Order','Customer','Project','Qty','Committed','Readiness','Production','Payment',''], rows, 'No orders yet.');
+    pageRoot.innerHTML = pageHeading('Orders','Track readiness, production, QC, dispatch and payment in one order record.','<button class="primary-button" data-action="new-order"><i data-lucide="plus"></i> New Order</button>') +
+      tableShell(['Order','Customer','Project','Qty','Committed','Readiness','Production','QC','Dispatch','Payment',''], rows, 'No orders yet.');
   }
 
-  function openOrderForm() {
+  function openOrderForm(projectId, orderId, returnView) {
+    const o = orderId ? CRMStore.get('orders', orderId) : {};
     const projects = CRMStore.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
+    const selected = o.projectId ? o.projectId + ' | ' + getProjectName(o.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
     const fields =
-      selectField('Project','projectOption',options[0] || '',options,true) +
-      inputField('Customer PO','po','','text',true) +
-      inputField('Quantity','quantity','','number',true) +
-      inputField('Order Date','orderDate',new Date().toISOString().slice(0,10),'date',true) +
-      inputField('Committed Date','committedDate','','date',true) +
-      inputField('Order Value','total','','text',false) +
-      inputField('Advance Received','advance','','text',false) +
-      inputField('Balance','balance','','text',false) +
-      inputField('Payment Due','paymentDue','','date',false) +
-      selectField('Payment Status','paymentStatus','Pending',['Pending','Partial','Paid','Overdue'],true) +
-      selectField('Readiness','readiness','Not Ready',['Not Ready','Ready'],true) +
-      selectField('Production Status','productionStatus','Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true);
-    modalForm('New Order','Create an order and carry the linked customer / project context.',fields,'Create Order',data => {
-      const projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      const project = CRMStore.get('projects', projectId);
-      data.projectId = projectId; data.customerId = project ? project.customerId : '';
-      data.qcStatus = 'Waiting'; data.dispatchStatus = 'Not Ready';
-      CRMStore.create('orders', data); closeModal(); toast('Order created.'); renderRoute();
+      selectField('Project','projectOption',selected,options,true) +
+      inputField('Customer PO','po',o.po,'text',false) +
+      inputField('Quantity','quantity',o.quantity,'number',true) +
+      inputField('Order Date','orderDate',o.orderDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Committed Date','committedDate',o.committedDate,'date',false) +
+      selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
+      selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
+      selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
+      selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
+      inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
+      inputField('Order Value','total',o.total,'text',false) +
+      inputField('Advance Received','advance',o.advance,'text',false) +
+      inputField('Balance','balance',o.balance,'text',false) +
+      inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
+      selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true) +
+      textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
+    modalForm(orderId ? 'Update Order' : 'New Order','Use one record to manage commercial and operational status.',fields,orderId ? 'Save Changes' : 'Create Order',data => {
+      const pid = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
+      const project = CRMStore.get('projects', pid);
+      data.projectId = pid; data.customerId = project ? project.customerId : '';
+      if (orderId) CRMStore.update('orders', orderId, data);
+      else CRMStore.create('orders', data);
+      closeModal(); toast(orderId ? 'Order updated.' : 'Order created.');
+      if (returnView === 'operations') location.hash = '#operations';
+      else renderRoute();
     });
   }
 
-  function renderOperations() {
+  
+function renderOperations() {
     const orders = CRMStore.list('orders');
     const cards = orders.map(o =>
-      '<article class="operation-card"><div class="operation-head"><div><span>' + esc(o.id) + '</span><h3>' + esc(getProjectName(o.projectId)) + '</h3><p>' + esc(getCustomerName(o.customerId)) + '</p></div>' + badge(o.productionStatus) + '</div><div class="operation-steps"><div class="' + (/Materials|Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Ready/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div><div class="detail-grid compact">' + detailItem('Quantity',o.quantity) + detailItem('Committed',o.committedDate) + detailItem('QC',o.qcStatus) + detailItem('Dispatch',o.dispatchStatus) + '</div></article>'
+      '<article class="operation-card"><div class="operation-head"><div><span>' + esc(o.id) + '</span><h3>' + esc(getProjectName(o.projectId)) + '</h3><p>' + esc(getCustomerName(o.customerId)) + '</p></div>' + badge(o.productionStatus) + '</div>' +
+      '<div class="operation-steps"><div class="' + (/Materials|Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.qcStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Dispatched|In Transit|Delivered/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div>' +
+      '<div class="detail-grid compact">' + detailItem('Quantity',o.quantity) + detailItem('Committed',o.committedDate) + detailItem('QC',o.qcStatus) + detailItem('Dispatch',o.dispatchStatus) + '</div>' +
+      (o.operationsNotes ? '<p class="body-copy operation-note">' + esc(o.operationsNotes) + '</p>' : '') +
+      '<div class="operation-actions"><button class="secondary-button" data-action="edit-operation" data-id="' + esc(o.id) + '"><i data-lucide="sliders-horizontal"></i> Update Status</button></div></article>'
     ).join('');
-    pageRoot.innerHTML = pageHeading('Operations','Production, QC and dispatch visibility in one place.','') +
+    pageRoot.innerHTML = pageHeading('Operations','Update Production → QC → Dispatch status without opening a separate ERP.','') +
       '<div class="operation-grid">' + (cards || '<p class="empty-text">No active operations.</p>') + '</div>';
   }
 
