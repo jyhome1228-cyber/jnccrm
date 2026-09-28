@@ -1,8 +1,8 @@
 # JN COS TECH CRM
 
-Phase 1 frontend foundation for the JN Cos Tech internal CRM.
+Phase 1 internal CRM for JN Cos Tech.
 
-## Phase 1 navigation
+## Navigation
 
 1. Dashboard
 2. Customers
@@ -30,40 +30,126 @@ Lead / Enquiry
 → Dispatch  
 → Payment Status
 
-## Current implementation
+## Implemented in this phase
 
-This first commit prepares the interface foundation:
+### Authentication shell
+- Login screen
+- Browser session persistence
+- Protected CRM entry
+- Sign out
 
-- Responsive dashboard shell
-- 10-item sidebar navigation
-- KPI cards
-- Today schedule
+> Current authentication is intentionally local for Phase 1 prototyping. Replace it with Firebase Auth, Supabase Auth or another production authentication provider before real customer data is stored.
+
+### Dashboard
+- Live KPI counts from CRM records
+- Upcoming schedule
 - Projects requiring attention
 - Recent activity
-- Project / order / payment charts
-- Recent leads table
-- Quick Add modal
-- Login screen prototype
-- Responsive mobile navigation
-- Placeholder route/module states
+- Project status chart
+- Lead pipeline chart
+- Payment status chart
+- Recent leads
+- Notification count
 
-## Files
+### Customers
+- Create / edit / delete
+- Customer company information
+- Customer 360° detail screen
+- Linked projects, quotations and orders
+- Internal notes
 
-- `index.html` — CRM dashboard prototype
-- `login.html` — login prototype
-- `styles.css` — shared design system
-- `app.js` — UI interactions and dashboard charts
+### Leads
+- Create / edit / delete
+- Enquiry type and source
+- Owner and next action
+- Pipeline status
+- Convert Lead → Customer + Project
 
-## Next implementation steps
+### Projects
+- Create / edit / delete
+- Customer relation
+- Product brief
+- Sales and R&D owners
+- Project status
+- Formula / packaging / artwork / approval status overview
+- Linked samples, quotations and orders
 
-1. Decide backend/authentication stack.
-2. Connect real login and role permissions.
-3. Define database schema for Customers, Leads, Projects, Samples, Quotations, Orders and Operations.
-4. Implement list/detail/create/edit screens for each core module.
-5. Connect Calendar to CRM due dates.
-6. Connect website enquiry form to Leads.
-7. Add audit history and internal notifications.
+### Samples
+- Create / edit / delete
+- Version control structure
+- Dispatch information
+- Tracking / AWB
+- Expected feedback date
+- Customer feedback
+
+### Quotations
+- Create / delete
+- Project relation
+- Version, MOQ, unit price, terms and validity
+- Commercial status
+
+### Orders
+- Create / delete
+- Project and customer relation
+- PO / quantity / committed date
+- Readiness
+- Production status
+- Payment status
+
+### Operations
+- Production visibility
+- QC status
+- Dispatch status
+- Per-order progress view
+
+### Calendar
+- Lead follow-ups
+- Project targets
+- Sample feedback dates
+- Quotation expiry
+- Order committed dates
+- Payment due dates
+
+### Global functions
+- Search across core records
+- Notifications
+- Activity history
+- Responsive desktop/mobile navigation
+- Persistent local demo data
+
+## Current data layer
+
+The current build uses browser `localStorage` through `crm-store.js`.
+
+This is suitable for:
+- UX validation
+- Workflow testing
+- Client review
+- Phase 1 frontend development
+
+It is **not** suitable for production multi-user use.
+
+## Next backend step
+
+Recommended next milestone:
+
+1. Connect production authentication.
+2. Replace localStorage with a shared cloud database.
+3. Apply role-based permissions.
+4. Add file storage.
+5. Connect JN Cos Tech website enquiries to Leads.
+6. Add audit logs at database level.
+
+## Suggested backend
+
+A practical next stack is:
+
+- Firebase Authentication
+- Firestore
+- Firebase Storage
+
+or an equivalent Supabase/PostgreSQL implementation.
 
 ## Phase 1 scope note
 
-Phase 1 should remain an operational CRM rather than a full ERP. Full inventory valuation, detailed factory records, accounting replacement, WhatsApp API, courier API and advanced analytics should be handled as later integrations.
+This CRM should remain an operational workflow system rather than a full ERP. Full inventory valuation, detailed factory records, accounting replacement, WhatsApp API, courier API and advanced analytics should be handled as later integrations.
