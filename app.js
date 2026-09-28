@@ -1,102 +1,706 @@
-lucide.createIcons();
+(() => {
+  const session = CRMStore.getSession();
+  if (!session) {
+    location.replace('./login.html');
+    return;
+  }
 
-const sidebar = document.getElementById('sidebar');
-const menuButton = document.getElementById('menuButton');
-const navItems = [...document.querySelectorAll('.nav-item')];
-const pageRoot = document.getElementById('pageRoot');
-const searchInput = document.getElementById('globalSearch');
+  const pageRoot = document.getElementById('pageRoot');
+  const sidebar = document.getElementById('sidebar');
+  const menuButton = document.getElementById('menuButton');
+  const navItems = Array.from(document.querySelectorAll('.nav-item'));
+  const searchInput = document.getElementById('globalSearch');
+  const modal = document.getElementById('appModal');
+  const modalContent = document.getElementById('modalContent');
+  const closeModalButton = document.getElementById('closeModal');
+  const toastEl = document.getElementById('toast');
+  let charts = [];
 
-menuButton?.addEventListener('click', () => sidebar.classList.toggle('open'));
+  document.getElementById('sessionName').textContent = session.name || 'JN COS User';
+  document.getElementById('sessionRole').textContent = (session.department || 'General') + ' · ' + (session.role || 'Staff');
+  document.getElementById('sessionAvatar').textContent = initials(session.name || 'JN COS');
 
-navItems.forEach(item => {
-  item.addEventListener('click', (event) => {
-    navItems.forEach(n => n.classList.remove('active'));
-    item.classList.add('active');
-    sidebar.classList.remove('open');
+  menuButton.addEventListener('click', () => sidebar.classList.toggle('open'));
+  closeModalButton.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-    const view = item.dataset.view;
-    if (view !== 'dashboard') {
-      event.preventDefault();
-      renderPlaceholder(view);
-    } else {
-      location.reload();
+  document.getElementById('userMenuButton').addEventListener('click', () => {
+    openModal(
+      '<p class="eyebrow">ACCOUNT</p>' +
+      '<h2>' + esc(session.name) + '</h2>' +
+      '<p class="modal-subtitle">' + esc(session.email) + '</p>' +
+      '<div class="detail-grid">' +
+        detailItem('Department', session.department || 'General') +
+        detailItem('Role', session.role || 'Staff') +
+      '</div>' +
+      '<div class="modal-actions"><button class="secondary-button" data-action="logout">Sign out</button></div>'
+    );
+  });
+
+  document.getElementById('notificationButton').addEventListener('click', () => renderNotifications());
+
+  document.addEventListener('click', e => {
+    const button = e.target.closest('[data-action]');
+    if (!button) return;
+    const action = button.dataset.action;
+    const id = button.dataset.id || '';
+    const collection = button.dataset.collection || '';
+
+    if (action === 'logout') {
+      CRMStore.logout();
+      location.replace('./login.html');
+    }
+    if (action === 'new-customer') openCustomerForm();
+    if (action === 'edit-customer') openCustomerForm(id);
+    if (action === 'delete-customer') deleteRecord('customers', id, 'customer');
+    if (action === 'new-lead') openLeadForm();
+    if (action === 'edit-lead') openLeadForm(id);
+    if (action === 'delete-lead') deleteRecord('leads', id, 'lead');
+    if (action === 'lead-to-project') convertLeadToProject(id);
+    if (action === 'new-project') openProjectForm();
+    if (action === 'edit-project') openProjectForm(id);
+    if (action === 'delete-project') deleteRecord('projects', id, 'project');
+    if (action === 'new-sample') openSampleForm(button.dataset.projectId || '');
+    if (action === 'edit-sample') openSampleForm('', id);
+    if (action === 'delete-record' && collection) deleteRecord(collection, id, collection.slice(0,-1));
+    if (action === 'new-quotation') openQuotationForm();
+    if (action === 'new-order') openOrderForm();
+    if (action === 'reset-data') {
+      if (confirm('Reset all local CRM demo data?')) {
+        CRMStore.reset();
+        toast('Demo data reset.');
+        renderRoute();
+      }
     }
   });
-});
 
-function renderPlaceholder(view){
-  const name = view.charAt(0).toUpperCase() + view.slice(1);
-  pageRoot.innerHTML = `
-    <div class="page-heading">
-      <div>
-        <p class="eyebrow">JN COS TECH CRM</p>
-        <h1>${name}</h1>
-        <p>This module is included in the Phase 1 information architecture.</p>
-      </div>
-      <button class="primary-button"><i data-lucide="plus"></i> New ${name.replace(/s$/, '')}</button>
-    </div>
-    <section class="panel" style="min-height:540px;display:grid;place-items:center;text-align:center">
-      <div style="max-width:460px">
-        <div class="stat-icon blue" style="margin:0 auto 18px"><i data-lucide="construction"></i></div>
-        <h2 style="margin:0 0 10px">${name} module prepared</h2>
-        <p style="color:#738097;line-height:1.7;font-size:13px;margin:0">
-          The navigation and design system are ready. Data tables, forms, filters and record detail views will be connected in the next implementation step.
-        </p>
-      </div>
-    </section>`;
-  lucide.createIcons();
-}
+  navItems.forEach(item => {
+    item.addEventListener('click', () => sidebar.classList.remove('open'));
+  });
 
-document.addEventListener('keydown', e => {
-  if (e.key === '/' && document.activeElement !== searchInput) {
-    e.preventDefault();
-    searchInput.focus();
+  window.addEventListener('hashchange', renderRoute);
+
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && document.activeElement !== searchInput) {
+      e.preventDefault();
+      searchInput.focus();
+    }
+    if (e.key === 'Escape') closeModal();
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      renderSearch(searchInput.value);
+    }
+  });
+
+  function esc(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;');
   }
-});
 
-const quickModal = document.getElementById('quickModal');
-document.getElementById('quickAdd')?.addEventListener('click', () => quickModal.classList.remove('hidden'));
-document.getElementById('closeModal')?.addEventListener('click', () => quickModal.classList.add('hidden'));
-quickModal?.addEventListener('click', e => {
-  if (e.target === quickModal) quickModal.classList.add('hidden');
-});
+  function initials(name) {
+    return String(name).split(/\s+/).filter(Boolean).slice(0,2).map(p => p[0]).join('').toUpperCase();
+  }
 
-const chartFont = { family: 'Inter', size: 10 };
-Chart.defaults.font = chartFont;
-Chart.defaults.color = '#728096';
+  function fmtDate(value) {
+    if (!value) return '—';
+    const d = new Date(value + (String(value).length === 10 ? 'T00:00:00' : ''));
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-CA');
+  }
 
-const projectCanvas = document.getElementById('projectChart');
-if(projectCanvas){
-  new Chart(projectCanvas, {
-    type:'doughnut',
-    data:{
-      labels:['Development','Sample','Quotation','On Hold','Completed'],
-      datasets:[{data:[8,5,4,3,3],backgroundColor:['#4e89ff','#7759d9','#f6a443','#8290a6','#37b879'],borderWidth:0}]
-    },
-    options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'right',labels:{boxWidth:8,boxHeight:8,usePointStyle:true,padding:12}}}}
-  });
-}
+  function getCustomerName(id) {
+    const item = CRMStore.get('customers', id);
+    return item ? item.company : '—';
+  }
 
-const orderCanvas = document.getElementById('orderChart');
-if(orderCanvas){
-  new Chart(orderCanvas, {
-    type:'bar',
-    data:{
-      labels:['May','Jun','Jul','Aug','Sep'],
-      datasets:[
-        {label:'Orders',data:[9,11,14,14,17],backgroundColor:'#4e89ff',borderRadius:4},
-        {label:'Production',data:[6,8,9,11,13],backgroundColor:'#37b879',borderRadius:4}
-      ]
-    },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'#edf1f5'}}}}
-  });
-}
+  function getProjectName(id) {
+    const item = CRMStore.get('projects', id);
+    return item ? item.name : '—';
+  }
 
-const paymentCanvas = document.getElementById('paymentChart');
-if(paymentCanvas){
-  new Chart(paymentCanvas, {
-    type:'doughnut',
-    data:{labels:['Paid','Partial','Overdue'],datasets:[{data:[60,20,20],backgroundColor:['#37b879','#4e89ff','#ec5c67'],borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'right',labels:{boxWidth:8,boxHeight:8,usePointStyle:true,padding:12}}}}
-  });
-}
+  function statusClass(status) {
+    const s = String(status || '').toLowerCase();
+    if (/paid|approved|active|delivered|ready|won|released/.test(s)) return 'success';
+    if (/overdue|rejected|lost|hold|cancel/.test(s)) return 'danger';
+    if (/pending|waiting|revision|feedback|draft/.test(s)) return 'warning';
+    return 'info';
+  }
+
+  function badge(status) {
+    return '<span class="badge ' + statusClass(status) + '">' + esc(status || '—') + '</span>';
+  }
+
+  function detailItem(label, value) {
+    return '<div class="detail-item"><span>' + esc(label) + '</span><strong>' + esc(value || '—') + '</strong></div>';
+  }
+
+  function toast(message) {
+    toastEl.textContent = message;
+    toastEl.classList.remove('hidden');
+    clearTimeout(window.__crmToastTimer);
+    window.__crmToastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2200);
+  }
+
+  function openModal(html) {
+    modalContent.innerHTML = html;
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    modalContent.innerHTML = '';
+  }
+
+  function modalForm(title, subtitle, fields, submitLabel, onSubmit) {
+    const html =
+      '<p class="eyebrow">JN COS TECH CRM</p>' +
+      '<h2>' + esc(title) + '</h2>' +
+      '<p class="modal-subtitle">' + esc(subtitle || '') + '</p>' +
+      '<form class="record-form" id="recordForm">' +
+        '<div class="form-grid">' + fields + '</div>' +
+        '<div class="modal-actions">' +
+          '<button type="button" class="secondary-button" id="cancelForm">Cancel</button>' +
+          '<button type="submit" class="primary-button">' + esc(submitLabel || 'Save') + '</button>' +
+        '</div>' +
+      '</form>';
+    openModal(html);
+    document.getElementById('cancelForm').addEventListener('click', closeModal);
+    document.getElementById('recordForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.currentTarget).entries());
+      onSubmit(data);
+    });
+  }
+
+  function inputField(label, name, value, type, required, span) {
+    return '<label class="field ' + (span ? 'field-span' : '') + '">' +
+      '<span>' + esc(label) + (required ? ' *' : '') + '</span>' +
+      '<input name="' + esc(name) + '" type="' + esc(type || 'text') + '" value="' + esc(value || '') + '" ' + (required ? 'required' : '') + ' />' +
+    '</label>';
+  }
+
+  function textAreaField(label, name, value, span) {
+    return '<label class="field ' + (span ? 'field-span' : '') + '"><span>' + esc(label) + '</span><textarea name="' + esc(name) + '" rows="4">' + esc(value || '') + '</textarea></label>';
+  }
+
+  function selectField(label, name, value, options, required, span) {
+    return '<label class="field ' + (span ? 'field-span' : '') + '"><span>' + esc(label) + (required ? ' *' : '') + '</span><select name="' + esc(name) + '" ' + (required ? 'required' : '') + '>' +
+      options.map(opt => '<option value="' + esc(opt) + '" ' + (String(opt) === String(value) ? 'selected' : '') + '>' + esc(opt) + '</option>').join('') +
+      '</select></label>';
+  }
+
+  function pageHeading(title, description, actionHtml) {
+    return '<div class="page-heading"><div><p class="eyebrow">JN COS TECH CRM</p><h1>' + esc(title) + '</h1><p>' + esc(description) + '</p></div>' + (actionHtml || '') + '</div>';
+  }
+
+  function tableShell(headers, rows, emptyText) {
+    return '<section class="panel table-panel"><div class="table-wrap"><table class="data-table"><thead><tr>' +
+      headers.map(h => '<th>' + esc(h) + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      (rows || '<tr><td colspan="' + headers.length + '" class="empty-cell">' + esc(emptyText || 'No records') + '</td></tr>') +
+      '</tbody></table></div></section>';
+  }
+
+  function setActiveNav(view) {
+    navItems.forEach(item => item.classList.toggle('active', item.dataset.view === view));
+  }
+
+  function destroyCharts() {
+    charts.forEach(chart => chart.destroy());
+    charts = [];
+  }
+
+  function renderRoute() {
+    destroyCharts();
+    const raw = location.hash.replace(/^#/,'') || 'dashboard';
+    const parts = raw.split('/');
+    const view = parts[0];
+    const id = parts[1] || '';
+    setActiveNav(view);
+    if (view === 'dashboard') renderDashboard();
+    else if (view === 'customers') id ? renderCustomerDetail(id) : renderCustomers();
+    else if (view === 'leads') renderLeads();
+    else if (view === 'projects') id ? renderProjectDetail(id) : renderProjects();
+    else if (view === 'samples') renderSamples();
+    else if (view === 'quotations') renderQuotations();
+    else if (view === 'orders') renderOrders();
+    else if (view === 'operations') renderOperations();
+    else if (view === 'calendar') renderCalendar();
+    else if (view === 'settings') renderSettings();
+    else renderDashboard();
+    lucide.createIcons();
+    updateNotificationCount();
+  }
+
+  function updateNotificationCount() {
+    const state = CRMStore.getState();
+    const today = new Date().toISOString().slice(0,10);
+    const dueLeads = state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).length;
+    const waitingSamples = state.samples.filter(s => /Waiting|Revision/.test(s.status)).length;
+    const count = dueLeads + waitingSamples;
+    const el = document.getElementById('notificationCount');
+    el.textContent = count;
+    el.style.display = count ? 'grid' : 'none';
+  }
+
+  function renderNotifications() {
+    const state = CRMStore.getState();
+    const today = new Date().toISOString().slice(0,10);
+    const items = [];
+    state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).forEach(l => {
+      items.push('<div class="notification-row"><i data-lucide="clock-alert"></i><div><strong>' + esc(l.company) + '</strong><p>Follow-up: ' + esc(l.nextAction || 'Next action') + ' · ' + esc(l.nextActionDate) + '</p></div></div>');
+    });
+    state.samples.filter(s => /Waiting|Revision/.test(s.status)).forEach(s => {
+      items.push('<div class="notification-row"><i data-lucide="flask-conical"></i><div><strong>' + esc(s.id) + '</strong><p>' + esc(s.status) + ' · ' + esc(getProjectName(s.projectId)) + '</p></div></div>');
+    });
+    openModal('<p class="eyebrow">NOTIFICATIONS</p><h2>Items requiring attention</h2><div class="notification-list">' + (items.join('') || '<p class="empty-text">No pending notifications.</p>') + '</div>');
+  }
+
+  function renderDashboard() {
+    const state = CRMStore.getState();
+    const today = new Date().toISOString().slice(0,10);
+    const newLeads = state.leads.filter(l => l.status === 'New').length;
+    const activeProjects = state.projects.filter(p => !/Approved|Cancelled/.test(p.status)).length;
+    const feedbackWaiting = state.samples.filter(s => /Feedback Waiting|Revision/.test(s.status)).length;
+    const approvalPending = state.projects.filter(p => /Approval|Feedback|Pending/.test(p.approvalStatus)).length;
+    const activeOrders = state.orders.length;
+    const readyDispatch = state.orders.filter(o => /Ready/.test(o.dispatchStatus)).length;
+    const overdue = state.orders.filter(o => o.paymentStatus === 'Overdue').length;
+    const schedule = [];
+
+    state.leads.filter(l => l.nextActionDate).forEach(l => schedule.push({date:l.nextActionDate,title:l.company + ' · ' + l.nextAction,meta:'Lead follow-up'}));
+    state.projects.filter(p => p.targetDate).forEach(p => schedule.push({date:p.targetDate,title:p.id + ' · ' + p.name,meta:'Project target'}));
+    state.orders.filter(o => o.committedDate).forEach(o => schedule.push({date:o.committedDate,title:o.id + ' · Dispatch',meta:getCustomerName(o.customerId)}));
+
+    schedule.sort((a,b) => a.date.localeCompare(b.date));
+    const upcoming = schedule.filter(i => i.date >= today).slice(0,5);
+
+    const projectRows = state.projects.slice(0,5).map(p =>
+      '<div class="attention-item"><span>' + esc(p.id) + '</span><div><strong>' + esc(getCustomerName(p.customerId)) + '</strong><p>' + esc(p.name) + '</p></div>' + badge(p.approvalStatus || p.status) + '<small>' + esc(p.targetDate) + '</small></div>'
+    ).join('');
+
+    const activityRows = state.activities.slice(0,5).map(a =>
+      '<div><span class="activity-icon sky"><i data-lucide="history"></i></span><p><strong>' + esc(a.text) + '</strong><small>' + esc(a.meta) + ' · ' + fmtDate(a.createdAt) + '</small></p></div>'
+    ).join('');
+
+    pageRoot.innerHTML =
+      pageHeading('Good morning, ' + (session.name.split(' ')[0] || session.name) + '.', 'Review what needs attention and continue today\'s work.',
+        '<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>') +
+      '<div class="stat-grid">' +
+        statCard('user-plus','blue','New Leads',newLeads,'Current pipeline') +
+        statCard('folder-kanban','green','Active Projects',activeProjects,'In progress') +
+        statCard('flask-conical','violet','Sample Feedback',feedbackWaiting,'Waiting / revision') +
+        statCard('badge-check','orange','Approval Pending',approvalPending,'Needs review') +
+        statCard('shopping-cart','teal','Active Orders',activeOrders,'Open orders') +
+        statCard('truck','sky','Ready to Dispatch',readyDispatch,'Operations') +
+        statCard('credit-card','red','Payment Overdue',overdue,'Needs follow-up') +
+        statCard('users','navy','Customers',state.customers.length,'Total accounts') +
+      '</div>' +
+      '<div class="dashboard-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="calendar-clock"></i><h2>Upcoming Schedule</h2></div><button onclick="location.hash=\'#calendar\'">View all</button></div><div class="timeline">' +
+          (upcoming.map((i,idx) => '<div class="timeline-item"><time>' + esc(i.date.slice(5)) + '</time><span class="dot ' + ['blue-dot','green-dot','orange-dot','violet-dot'][idx%4] + '"></span><div><strong>' + esc(i.title) + '</strong><p>' + esc(i.meta) + '</p></div><i data-lucide="chevron-right"></i></div>').join('') || '<p class="empty-text">No upcoming schedule.</p>') +
+        '</div></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="folder-kanban"></i><h2>Projects Requiring Attention</h2></div><button onclick="location.hash=\'#projects\'">View all</button></div><div class="attention-list">' + projectRows + '</div></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="history"></i><h2>Recent Activity</h2></div></div><div class="activity-list">' + activityRows + '</div></section>' +
+      '</div>' +
+      '<div class="analytics-grid">' +
+        '<section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="pie-chart"></i><h2>Project Status</h2></div></div><canvas id="projectChart"></canvas></section>' +
+        '<section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="bar-chart-3"></i><h2>Lead Pipeline</h2></div></div><canvas id="leadChart"></canvas></section>' +
+        '<section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="circle-dollar-sign"></i><h2>Payment Status</h2></div></div><canvas id="paymentChart"></canvas></section>' +
+      '</div>' +
+      renderRecentLeads(state.leads.slice(0,5));
+
+    renderDashboardCharts(state);
+  }
+
+  function statCard(icon, tone, title, value, note) {
+    return '<article class="stat-card"><div class="stat-icon ' + tone + '"><i data-lucide="' + icon + '"></i></div><div><span>' + esc(title) + '</span><strong>' + esc(value) + '</strong><small class="muted">' + esc(note) + '</small></div></article>';
+  }
+
+  function renderRecentLeads(leads) {
+    const rows = leads.map(l =>
+      '<tr><td>' + fmtDate(l.createdAt) + '</td><td><strong>' + esc(l.company) + '</strong></td><td>' + esc(l.contact) + '</td><td>' + esc(l.country) + '</td><td>' + esc(l.type) + '</td><td>' + esc(l.source) + '</td><td>' + badge(l.status) + '</td><td>' + esc(l.owner) + '</td></tr>'
+    ).join('');
+    return '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="user-plus"></i><h2>Recent Leads</h2></div><button onclick="location.hash=\'#leads\'">View all</button></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Company</th><th>Contact</th><th>Country</th><th>Type</th><th>Source</th><th>Status</th><th>Owner</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>';
+  }
+
+  function renderDashboardCharts(state) {
+    Chart.defaults.font = { family:'Inter', size:10 };
+    Chart.defaults.color = '#728096';
+
+    const projectCounts = {};
+    state.projects.forEach(p => projectCounts[p.status] = (projectCounts[p.status] || 0) + 1);
+    charts.push(new Chart(document.getElementById('projectChart'), {
+      type:'doughnut',
+      data:{labels:Object.keys(projectCounts),datasets:[{data:Object.values(projectCounts),backgroundColor:['#4e89ff','#7759d9','#f6a443','#37b879','#8290a6','#ec5c67'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'right',labels:{boxWidth:8,boxHeight:8,usePointStyle:true,padding:12}}}}
+    }));
+
+    const leadStages = ['New','Contacted','Qualified','Development','Quotation','Won'];
+    charts.push(new Chart(document.getElementById('leadChart'), {
+      type:'bar',
+      data:{labels:leadStages,datasets:[{label:'Leads',data:leadStages.map(s => state.leads.filter(l => l.status === s).length),backgroundColor:'#4e89ff',borderRadius:5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0},grid:{color:'#edf1f5'}}}}
+    }));
+
+    const payStages = ['Paid','Partial','Overdue'];
+    charts.push(new Chart(document.getElementById('paymentChart'), {
+      type:'doughnut',
+      data:{labels:payStages,datasets:[{data:payStages.map(s => state.orders.filter(o => o.paymentStatus === s).length),backgroundColor:['#37b879','#4e89ff','#ec5c67'],borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'right',labels:{boxWidth:8,boxHeight:8,usePointStyle:true,padding:12}}}}
+    }));
+  }
+
+  function renderCustomers() {
+    const customers = CRMStore.list('customers');
+    const rows = customers.map(c =>
+      '<tr><td><a class="table-link" href="#customers/' + esc(c.id) + '">' + esc(c.id) + '</a></td><td><strong>' + esc(c.company) + '</strong></td><td>' + esc(c.country) + '</td><td>' + esc(c.type) + '</td><td>' + esc(c.contact) + '</td><td>' + esc(c.owner) + '</td><td>' + badge(c.status) + '</td><td class="actions-cell"><button class="row-action" data-action="edit-customer" data-id="' + esc(c.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-customer" data-id="' + esc(c.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+    ).join('');
+    pageRoot.innerHTML =
+      pageHeading('Customers','Manage customer companies, contacts and account history.','<button class="primary-button" data-action="new-customer"><i data-lucide="plus"></i> New Customer</button>') +
+      '<div class="summary-strip"><div><span>Total Customers</span><strong>' + customers.length + '</strong></div><div><span>Active</span><strong>' + customers.filter(c=>c.status==='Active').length + '</strong></div><div><span>Prospects</span><strong>' + customers.filter(c=>c.status==='Prospect').length + '</strong></div></div>' +
+      tableShell(['ID','Company','Country','Type','Main Contact','Owner','Status',''], rows, 'No customers yet.');
+  }
+
+  function renderCustomerDetail(id) {
+    const c = CRMStore.get('customers', id);
+    if (!c) { pageRoot.innerHTML = pageHeading('Customer not found','The requested customer record does not exist.',''); return; }
+    const projects = CRMStore.list('projects').filter(p => p.customerId === id);
+    const orders = CRMStore.list('orders').filter(o => o.customerId === id);
+    const projectIds = projects.map(p => p.id);
+    const quotes = CRMStore.list('quotations').filter(q => projectIds.includes(q.projectId));
+
+    pageRoot.innerHTML =
+      '<div class="detail-header"><div><a class="back-link" href="#customers"><i data-lucide="arrow-left"></i> Customers</a><p class="eyebrow">CUSTOMER 360°</p><h1>' + esc(c.company) + '</h1><p>' + esc(c.country) + ' · ' + esc(c.type) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-customer" data-id="' + esc(c.id) + '">Edit</button><button class="primary-button" data-action="new-project"><i data-lucide="plus"></i> New Project</button></div></div>' +
+      '<div class="detail-grid">' +
+        detailItem('Customer ID',c.id) + detailItem('Status',c.status) + detailItem('Sales Owner',c.owner) + detailItem('Payment Terms',c.paymentTerms) +
+        detailItem('Main Contact',c.contact) + detailItem('Email',c.email) + detailItem('Phone',c.phone) + detailItem('Country',c.country) +
+      '</div>' +
+      '<div class="record-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="folder-kanban"></i><h2>Projects</h2></div><span class="count-pill">' + projects.length + '</span></div>' + (projects.map(p => '<a class="record-row-link" href="#projects/' + esc(p.id) + '"><div><strong>' + esc(p.name) + '</strong><span>' + esc(p.id) + '</span></div>' + badge(p.status) + '</a>').join('') || '<p class="empty-text">No projects.</p>') + '</section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="file-text"></i><h2>Commercial</h2></div></div><div class="metric-list"><div><span>Quotations</span><strong>' + quotes.length + '</strong></div><div><span>Orders</span><strong>' + orders.length + '</strong></div><div><span>Open Balance</span><strong>' + esc(orders.filter(o=>o.balance && o.balance!=='₹0').length) + ' orders</strong></div></div></section>' +
+      '</div>' +
+      '<section class="panel"><div class="panel-head"><div><i data-lucide="notebook-text"></i><h2>Internal Notes</h2></div></div><p class="body-copy">' + esc(c.notes || 'No notes.') + '</p></section>';
+  }
+
+  function openCustomerForm(id) {
+    const c = id ? CRMStore.get('customers', id) : {};
+    const fields =
+      inputField('Company Name','company',c.company,'text',true) +
+      inputField('Country','country',c.country,'text',true) +
+      selectField('Customer Type','type',c.type || 'OEM',['OEM','ODM','Private Label','Distributor','Dealer','Retail','Other'],true) +
+      selectField('Status','status',c.status || 'Active',['Active','Prospect','Dormant','On Hold'],true) +
+      inputField('Main Contact','contact',c.contact,'text',true) +
+      inputField('Email','email',c.email,'email',false) +
+      inputField('Phone / WhatsApp','phone',c.phone,'text',false) +
+      inputField('Sales Owner','owner',c.owner || session.name,'text',true) +
+      inputField('Payment Terms','paymentTerms',c.paymentTerms,'text',false,true) +
+      textAreaField('Internal Notes','notes',c.notes,true);
+    modalForm(id ? 'Edit Customer' : 'New Customer','Customer company and account information.',fields,id ? 'Save Changes' : 'Create Customer',data => {
+      id ? CRMStore.update('customers', id, data) : CRMStore.create('customers', data);
+      closeModal(); toast(id ? 'Customer updated.' : 'Customer created.'); renderRoute();
+    });
+  }
+
+  function renderLeads() {
+    const leads = CRMStore.list('leads');
+    const rows = leads.map(l =>
+      '<tr><td><strong>' + esc(l.id) + '</strong></td><td>' + esc(l.company) + '<small class="cell-sub">' + esc(l.contact) + '</small></td><td>' + esc(l.type) + '</td><td>' + esc(l.source) + '</td><td>' + esc(l.owner) + '</td><td>' + badge(l.status) + '</td><td>' + esc(l.nextActionDate) + '<small class="cell-sub">' + esc(l.nextAction) + '</small></td><td class="actions-cell"><button class="row-action" title="Create Project" data-action="lead-to-project" data-id="' + esc(l.id) + '"><i data-lucide="folder-plus"></i></button><button class="row-action" data-action="edit-lead" data-id="' + esc(l.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-lead" data-id="' + esc(l.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+    ).join('');
+    pageRoot.innerHTML =
+      pageHeading('Leads','Capture enquiries, follow-ups and move qualified opportunities into projects.','<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>') +
+      '<div class="pipeline-strip">' + ['New','Contacted','Qualified','Development','Quotation','Won'].map(s => '<div><span>' + s + '</span><strong>' + leads.filter(l=>l.status===s).length + '</strong></div>').join('') + '</div>' +
+      tableShell(['Lead','Company / Contact','Type','Source','Owner','Status','Next Action',''], rows, 'No leads yet.');
+  }
+
+  function openLeadForm(id) {
+    const l = id ? CRMStore.get('leads', id) : {};
+    const fields =
+      inputField('Company','company',l.company,'text',true) +
+      inputField('Contact Person','contact',l.contact,'text',true) +
+      inputField('Email','email',l.email,'email',false) +
+      inputField('Phone / WhatsApp','phone',l.phone,'text',false) +
+      inputField('Country','country',l.country,'text',true) +
+      selectField('Enquiry Type','type',l.type || 'OEM',['OEM','ODM','Private Label','Export','Distributor','Dealer','Retail','Other'],true) +
+      selectField('Source','source',l.source || 'Website',['Website','Email','WhatsApp','Exhibition','Referral','Phone / Call','Manual'],true) +
+      inputField('Owner','owner',l.owner || session.name,'text',true) +
+      selectField('Status','status',l.status || 'New',['New','Contacted','Qualified','Development','Quotation','Won','Lost','On Hold'],true) +
+      inputField('Next Action Date','nextActionDate',l.nextActionDate,'date',false) +
+      inputField('Next Action','nextAction',l.nextAction,'text',false,true) +
+      textAreaField('Enquiry Details','details',l.details,true);
+    modalForm(id ? 'Edit Lead' : 'New Lead','Record the enquiry and always assign a next action.',fields,id ? 'Save Changes' : 'Create Lead',data => {
+      id ? CRMStore.update('leads', id, data) : CRMStore.create('leads', data);
+      closeModal(); toast(id ? 'Lead updated.' : 'Lead created.'); renderRoute();
+    });
+  }
+
+  function convertLeadToProject(id) {
+    const lead = CRMStore.get('leads', id);
+    if (!lead) return;
+    let customer = CRMStore.list('customers').find(c => c.company.toLowerCase() === lead.company.toLowerCase());
+    if (!customer) {
+      customer = CRMStore.create('customers', {
+        company:lead.company, country:lead.country, type:lead.type, contact:lead.contact, email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active', paymentTerms:'TBD', notes:'Created from ' + lead.id
+      });
+    }
+    const project = CRMStore.create('projects', {
+      customerId:customer.id,
+      name:lead.company + ' New Product',
+      category:'',
+      salesOwner:lead.owner,
+      rdOwner:'',
+      targetDate:'',
+      moq:'',
+      targetPrice:'',
+      status:'Brief Received',
+      brief:lead.details,
+      formulaStatus:'Not Started',
+      packagingStatus:'Not Started',
+      artworkStatus:'Not Started',
+      approvalStatus:'Pending'
+    });
+    CRMStore.update('leads', id, {status:'Development'});
+    toast('Project ' + project.id + ' created from lead.');
+    location.hash = '#projects/' + project.id;
+  }
+
+  function renderProjects() {
+    const projects = CRMStore.list('projects');
+    const rows = projects.map(p =>
+      '<tr class="clickable-row" onclick="location.hash=\'#projects/' + esc(p.id) + '\'"><td><strong>' + esc(p.id) + '</strong></td><td>' + esc(getCustomerName(p.customerId)) + '</td><td><strong>' + esc(p.name) + '</strong><small class="cell-sub">' + esc(p.category) + '</small></td><td>' + esc(p.salesOwner) + '</td><td>' + esc(p.rdOwner || '—') + '</td><td>' + badge(p.status) + '</td><td>' + esc(p.targetDate || '—') + '</td><td class="actions-cell" onclick="event.stopPropagation()"><button class="row-action" data-action="edit-project" data-id="' + esc(p.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-project" data-id="' + esc(p.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+    ).join('');
+    pageRoot.innerHTML =
+      pageHeading('Projects','Central OEM / ODM project workspace from brief to approval.','<button class="primary-button" data-action="new-project"><i data-lucide="plus"></i> New Project</button>') +
+      '<div class="summary-strip"><div><span>Total Projects</span><strong>' + projects.length + '</strong></div><div><span>Under Development</span><strong>' + projects.filter(p=>p.status==='Under Development').length + '</strong></div><div><span>Sample / Feedback</span><strong>' + projects.filter(p=>/Sample|Feedback|Revision/.test(p.status)).length + '</strong></div></div>' +
+      tableShell(['Project','Customer','Product','Sales','R&D','Status','Target Date',''], rows, 'No projects yet.');
+  }
+
+  function openProjectForm(id, preset) {
+    const p = id ? CRMStore.get('projects', id) : (preset || {});
+    const customers = CRMStore.list('customers');
+    const customerOptions = customers.map(c => c.id + ' | ' + c.company);
+    const currentCustomerOption = p.customerId ? (p.customerId + ' | ' + getCustomerName(p.customerId)) : (customerOptions[0] || '');
+    const fields =
+      selectField('Customer','customerOption',currentCustomerOption,customerOptions,true) +
+      inputField('Product / Project Name','name',p.name,'text',true) +
+      inputField('Product Category','category',p.category,'text',false) +
+      selectField('Project Status','status',p.status || 'Brief Received',['Brief Received','Under Development','Sample Ready','Sample Sent','Feedback','Revision','Approved','On Hold','Cancelled'],true) +
+      inputField('Sales Owner','salesOwner',p.salesOwner || session.name,'text',true) +
+      inputField('R&D Owner','rdOwner',p.rdOwner,'text',false) +
+      inputField('Target Date','targetDate',p.targetDate,'date',false) +
+      inputField('MOQ','moq',p.moq,'text',false) +
+      inputField('Target Price','targetPrice',p.targetPrice,'text',false) +
+      textAreaField('Product Brief','brief',p.brief,true);
+    modalForm(id ? 'Edit Project' : 'New Project','Create one OEM / ODM project per product or variant.',fields,id ? 'Save Changes' : 'Create Project',data => {
+      const customerId = String(data.customerOption || '').split(' | ')[0];
+      delete data.customerOption;
+      data.customerId = customerId;
+      if (!id) {
+        data.formulaStatus='Not Started'; data.packagingStatus='Not Started'; data.artworkStatus='Not Started'; data.approvalStatus='Pending';
+      }
+      const record = id ? CRMStore.update('projects', id, data) : CRMStore.create('projects', data);
+      closeModal(); toast(id ? 'Project updated.' : 'Project created.'); location.hash = '#projects/' + record.id;
+    });
+  }
+
+  function renderProjectDetail(id) {
+    const p = CRMStore.get('projects', id);
+    if (!p) { pageRoot.innerHTML = pageHeading('Project not found','The requested project record does not exist.',''); return; }
+    const samples = CRMStore.list('samples').filter(s => s.projectId === id);
+    const quotes = CRMStore.list('quotations').filter(q => q.projectId === id);
+    const orders = CRMStore.list('orders').filter(o => o.projectId === id);
+
+    pageRoot.innerHTML =
+      '<div class="detail-header"><div><a class="back-link" href="#projects"><i data-lucide="arrow-left"></i> Projects</a><p class="eyebrow">OEM / ODM PROJECT</p><h1>' + esc(p.name) + '</h1><p>' + esc(p.id) + ' · ' + esc(getCustomerName(p.customerId)) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-project" data-id="' + esc(p.id) + '">Edit Project</button><button class="primary-button" data-action="new-sample" data-project-id="' + esc(p.id) + '"><i data-lucide="plus"></i> Add Sample</button></div></div>' +
+      '<div class="project-status-bar"><div><span>Project Status</span>' + badge(p.status) + '</div><div><span>Formula</span>' + badge(p.formulaStatus) + '</div><div><span>Packaging</span>' + badge(p.packagingStatus) + '</div><div><span>Artwork</span>' + badge(p.artworkStatus) + '</div><div><span>Approval</span>' + badge(p.approvalStatus) + '</div></div>' +
+      '<div class="record-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="notebook-text"></i><h2>Product Brief</h2></div></div><p class="body-copy">' + esc(p.brief || 'No brief entered.') + '</p><div class="detail-grid compact">' + detailItem('Category',p.category) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) + detailItem('Target Date',p.targetDate) + detailItem('Sales Owner',p.salesOwner) + detailItem('R&D Owner',p.rdOwner) + '</div></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="flask-conical"></i><h2>Samples</h2></div><span class="count-pill">' + samples.length + '</span></div>' + (samples.map(s => '<div class="record-row"><div><strong>' + esc(s.id) + '</strong><span>' + esc(s.createdDate) + ' · ' + esc(s.rdOwner) + '</span></div>' + badge(s.status) + '</div>').join('') || '<p class="empty-text">No samples yet.</p>') + '</section>' +
+      '</div>' +
+      '<div class="record-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="file-text"></i><h2>Quotations</h2></div><button data-action="new-quotation">New</button></div>' + (quotes.map(q => '<div class="record-row"><div><strong>' + esc(q.id) + ' · ' + esc(q.version) + '</strong><span>' + esc(q.unitPrice) + ' / MOQ ' + esc(q.moq) + '</span></div>' + badge(q.status) + '</div>').join('') || '<p class="empty-text">No quotations.</p>') + '</section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="shopping-cart"></i><h2>Orders</h2></div></div>' + (orders.map(o => '<div class="record-row"><div><strong>' + esc(o.id) + '</strong><span>' + esc(o.quantity) + ' units · ' + esc(o.committedDate) + '</span></div>' + badge(o.productionStatus) + '</div>').join('') || '<p class="empty-text">No orders.</p>') + '</section>' +
+      '</div>';
+  }
+
+  function renderSamples() {
+    const samples = CRMStore.list('samples');
+    const rows = samples.map(s =>
+      '<tr><td><strong>' + esc(s.id) + '</strong></td><td>' + esc(s.projectId) + '<small class="cell-sub">' + esc(getProjectName(s.projectId)) + '</small></td><td>' + esc(s.version) + '</td><td>' + esc(s.rdOwner) + '</td><td>' + esc(s.createdDate) + '</td><td>' + badge(s.status) + '</td><td>' + esc(s.dispatchDate || '—') + '<small class="cell-sub">' + esc(s.tracking || '') + '</small></td><td>' + esc(s.feedbackDate || '—') + '</td><td class="actions-cell"><button class="row-action" data-action="edit-sample" data-id="' + esc(s.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-record" data-collection="samples" data-id="' + esc(s.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+    ).join('');
+    pageRoot.innerHTML = pageHeading('Samples','Track versions, dispatch and customer feedback.','<button class="primary-button" data-action="new-sample"><i data-lucide="plus"></i> New Sample</button>') +
+      tableShell(['Sample','Project','Version','R&D Owner','Created','Status','Dispatch','Feedback Due',''], rows, 'No samples yet.');
+  }
+
+  function openSampleForm(projectId, sampleId) {
+    const s = sampleId ? CRMStore.get('samples', sampleId) : {};
+    const projects = CRMStore.list('projects');
+    const options = projects.map(p => p.id + ' | ' + p.name);
+    const selected = s.projectId ? s.projectId + ' | ' + getProjectName(s.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
+    const fields =
+      selectField('Project','projectOption',selected,options,true) +
+      inputField('Version','version',s.version || 'V1','text',true) +
+      inputField('R&D Owner','rdOwner',s.rdOwner,'text',true) +
+      inputField('Created Date','createdDate',s.createdDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Quantity','quantity',s.quantity,'number',false) +
+      selectField('Status','status',s.status || 'Preparing',['Preparing','Ready','Sent','Feedback Waiting','Revision','Approved','Rejected'],true) +
+      inputField('Dispatch Date','dispatchDate',s.dispatchDate,'date',false) +
+      inputField('Courier','courier',s.courier,'text',false) +
+      inputField('Tracking / AWB','tracking',s.tracking,'text',false) +
+      inputField('Expected Feedback Date','feedbackDate',s.feedbackDate,'date',false) +
+      textAreaField('Customer Feedback','feedback',s.feedback,true);
+    modalForm(sampleId ? 'Edit Sample' : 'New Sample','Create a new version without overwriting previous versions.',fields,sampleId ? 'Save Changes' : 'Create Sample',data => {
+      const pid = String(data.projectOption || '').split(' | ')[0];
+      delete data.projectOption;
+      data.projectId = pid;
+      if (!sampleId) {
+        const versionNum = String(data.version || 'V1').replace(/\D/g,'') || '1';
+        data.id = 'SMP-' + pid.replace(/\D/g,'').padStart(3,'0') + '-V' + versionNum;
+      }
+      sampleId ? CRMStore.update('samples', sampleId, data) : CRMStore.create('samples', data);
+      closeModal(); toast(sampleId ? 'Sample updated.' : 'Sample created.'); renderRoute();
+    });
+  }
+
+  function renderQuotations() {
+    const quotes = CRMStore.list('quotations');
+    const rows = quotes.map(q =>
+      '<tr><td><strong>' + esc(q.id) + '</strong></td><td>' + esc(q.projectId) + '<small class="cell-sub">' + esc(getProjectName(q.projectId)) + '</small></td><td>' + esc(q.version) + '</td><td>' + esc(q.moq) + '</td><td>' + esc(q.unitPrice) + '</td><td>' + esc(q.paymentTerms) + '</td><td>' + esc(q.validUntil) + '</td><td>' + badge(q.status) + '</td><td class="actions-cell"><button class="row-action danger-action" data-action="delete-record" data-collection="quotations" data-id="' + esc(q.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+    ).join('');
+    pageRoot.innerHTML = pageHeading('Quotations','Manage quotation versions and commercial status.','<button class="primary-button" data-action="new-quotation"><i data-lucide="plus"></i> New Quotation</button>') +
+      tableShell(['Quote','Project','Version','MOQ','Unit Price','Terms','Valid Until','Status',''], rows, 'No quotations yet.');
+  }
+
+  function openQuotationForm() {
+    const projects = CRMStore.list('projects');
+    const options = projects.map(p => p.id + ' | ' + p.name);
+    const fields =
+      selectField('Project','projectOption',options[0] || '',options,true) +
+      inputField('Version','version','V1','text',true) +
+      inputField('MOQ','moq','','text',true) +
+      inputField('Unit Price','unitPrice','','text',true) +
+      inputField('Payment Terms','paymentTerms','50/50','text',false) +
+      inputField('Valid Until','validUntil','','date',false) +
+      selectField('Status','status','Draft',['Draft','Sent','Revision','Accepted','Rejected','Expired'],true) +
+      textAreaField('Notes','notes','',true);
+    modalForm('New Quotation','Create a commercial quotation linked to a project.',fields,'Create Quotation',data => {
+      data.projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
+      CRMStore.create('quotations', data); closeModal(); toast('Quotation created.'); renderRoute();
+    });
+  }
+
+  function renderOrders() {
+    const orders = CRMStore.list('orders');
+    const rows = orders.map(o =>
+      '<tr><td><strong>' + esc(o.id) + '</strong><small class="cell-sub">' + esc(o.po) + '</small></td><td>' + esc(getCustomerName(o.customerId)) + '</td><td>' + esc(getProjectName(o.projectId)) + '</td><td>' + esc(o.quantity) + '</td><td>' + esc(o.committedDate) + '</td><td>' + badge(o.readiness) + '</td><td>' + badge(o.productionStatus) + '</td><td>' + badge(o.paymentStatus) + '</td><td class="actions-cell"><button class="row-action danger-action" data-action="delete-record" data-collection="orders" data-id="' + esc(o.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
+    ).join('');
+    pageRoot.innerHTML = pageHeading('Orders','Track PO, readiness, production and payment status.','<button class="primary-button" data-action="new-order"><i data-lucide="plus"></i> New Order</button>') +
+      tableShell(['Order','Customer','Project','Qty','Committed','Readiness','Production','Payment',''], rows, 'No orders yet.');
+  }
+
+  function openOrderForm() {
+    const projects = CRMStore.list('projects');
+    const options = projects.map(p => p.id + ' | ' + p.name);
+    const fields =
+      selectField('Project','projectOption',options[0] || '',options,true) +
+      inputField('Customer PO','po','','text',true) +
+      inputField('Quantity','quantity','','number',true) +
+      inputField('Order Date','orderDate',new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Committed Date','committedDate','','date',true) +
+      inputField('Order Value','total','','text',false) +
+      inputField('Advance Received','advance','','text',false) +
+      inputField('Balance','balance','','text',false) +
+      inputField('Payment Due','paymentDue','','date',false) +
+      selectField('Payment Status','paymentStatus','Pending',['Pending','Partial','Paid','Overdue'],true) +
+      selectField('Readiness','readiness','Not Ready',['Not Ready','Ready'],true) +
+      selectField('Production Status','productionStatus','Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true);
+    modalForm('New Order','Create an order and carry the linked customer / project context.',fields,'Create Order',data => {
+      const projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
+      const project = CRMStore.get('projects', projectId);
+      data.projectId = projectId; data.customerId = project ? project.customerId : '';
+      data.qcStatus = 'Waiting'; data.dispatchStatus = 'Not Ready';
+      CRMStore.create('orders', data); closeModal(); toast('Order created.'); renderRoute();
+    });
+  }
+
+  function renderOperations() {
+    const orders = CRMStore.list('orders');
+    const cards = orders.map(o =>
+      '<article class="operation-card"><div class="operation-head"><div><span>' + esc(o.id) + '</span><h3>' + esc(getProjectName(o.projectId)) + '</h3><p>' + esc(getCustomerName(o.customerId)) + '</p></div>' + badge(o.productionStatus) + '</div><div class="operation-steps"><div class="' + (/Materials|Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Ready/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div><div class="detail-grid compact">' + detailItem('Quantity',o.quantity) + detailItem('Committed',o.committedDate) + detailItem('QC',o.qcStatus) + detailItem('Dispatch',o.dispatchStatus) + '</div></article>'
+    ).join('');
+    pageRoot.innerHTML = pageHeading('Operations','Production, QC and dispatch visibility in one place.','') +
+      '<div class="operation-grid">' + (cards || '<p class="empty-text">No active operations.</p>') + '</div>';
+  }
+
+  function renderCalendar() {
+    const state = CRMStore.getState();
+    const events = [];
+    state.leads.filter(l=>l.nextActionDate).forEach(l=>events.push({date:l.nextActionDate,type:'Follow-up',title:l.company + ' · ' + l.nextAction,link:'#leads'}));
+    state.projects.filter(p=>p.targetDate).forEach(p=>events.push({date:p.targetDate,type:'Project Target',title:p.id + ' · ' + p.name,link:'#projects/' + p.id}));
+    state.samples.filter(s=>s.feedbackDate).forEach(s=>events.push({date:s.feedbackDate,type:'Sample Feedback',title:s.id + ' · ' + getProjectName(s.projectId),link:'#samples'}));
+    state.quotations.filter(q=>q.validUntil).forEach(q=>events.push({date:q.validUntil,type:'Quotation Expiry',title:q.id + ' · ' + getProjectName(q.projectId),link:'#quotations'}));
+    state.orders.filter(o=>o.committedDate).forEach(o=>events.push({date:o.committedDate,type:'Dispatch / Commit',title:o.id + ' · ' + getCustomerName(o.customerId),link:'#orders'}));
+    state.orders.filter(o=>o.paymentDue).forEach(o=>events.push({date:o.paymentDue,type:'Payment Due',title:o.id + ' · ' + getCustomerName(o.customerId),link:'#orders'}));
+    events.sort((a,b)=>a.date.localeCompare(b.date));
+
+    const grouped = {};
+    events.forEach(e => { (grouped[e.date] ||= []).push(e); });
+    const rows = Object.keys(grouped).map(date =>
+      '<div class="calendar-day"><div class="calendar-date"><strong>' + esc(date.slice(-2)) + '</strong><span>' + esc(new Date(date+'T00:00:00').toLocaleDateString('en-US',{month:'short',weekday:'short'})) + '</span></div><div class="calendar-events">' +
+      grouped[date].map(e => '<a href="' + esc(e.link) + '"><span class="calendar-type">' + esc(e.type) + '</span><strong>' + esc(e.title) + '</strong></a>').join('') +
+      '</div></div>'
+    ).join('');
+
+    pageRoot.innerHTML = pageHeading('Calendar','One schedule for follow-ups, approvals, samples, production, dispatch and payments.','') +
+      '<section class="panel calendar-panel">' + (rows || '<p class="empty-text">No scheduled events.</p>') + '</section>';
+  }
+
+  function renderSettings() {
+    const state = CRMStore.getState();
+    const userRows = state.users.map(u =>
+      '<tr><td><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></td><td>' + esc(u.department) + '</td><td>' + badge(u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td></tr>'
+    ).join('');
+    pageRoot.innerHTML =
+      pageHeading('Settings','Manage users, roles and Phase 1 system preferences.','') +
+      '<div class="record-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="building-2"></i><h2>System</h2></div></div><div class="detail-grid compact">' + detailItem('Company',state.settings.companyName) + detailItem('Currency',state.settings.defaultCurrency) + detailItem('Date Format',state.settings.dateFormat) + detailItem('Storage','Browser Local Storage') + '</div></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Phase 1 Roles</h2></div></div><div class="tag-list">' + ['Admin','Management','Sales','R&D','Operations','Finance'].map(r=>'<span>'+r+'</span>').join('') + '</div><p class="body-copy small-copy">Field-level permission enforcement will be connected when production authentication is added.</p></section>' +
+      '</div>' +
+      '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="users"></i><h2>Users</h2></div></div><div class="table-wrap"><table><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Status</th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
+      '<section class="panel danger-zone"><div><h2>Local Demo Data</h2><p>Reset customers, leads, projects, samples, quotations and orders to the starter dataset.</p></div><button class="secondary-button" data-action="reset-data">Reset Demo Data</button></section>';
+  }
+
+  function renderSearch(query) {
+    const results = CRMStore.search(query);
+    pageRoot.innerHTML = pageHeading('Search','Results for "' + query + '".','') +
+      '<section class="panel search-results">' +
+      (results.map(item => {
+        const r = item.record;
+        let link = '#'+item.collection;
+        if (item.collection === 'customers') link = '#customers/' + r.id;
+        if (item.collection === 'projects') link = '#projects/' + r.id;
+        const title = r.company || r.name || r.id;
+        return '<a href="' + link + '"><div><span>' + esc(item.collection.toUpperCase()) + '</span><strong>' + esc(title) + '</strong><small>' + esc(r.id) + '</small></div><i data-lucide="arrow-up-right"></i></a>';
+      }).join('') || '<p class="empty-text">No matching records.</p>') +
+      '</section>';
+    lucide.createIcons();
+  }
+
+  function deleteRecord(collection, id, label) {
+    if (!confirm('Delete this ' + label + '?')) return;
+    CRMStore.remove(collection, id);
+    toast(label.charAt(0).toUpperCase() + label.slice(1) + ' deleted.');
+    renderRoute();
+  }
+
+  if (!location.hash) location.hash = '#dashboard';
+  renderRoute();
+})();
