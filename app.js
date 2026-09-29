@@ -236,10 +236,16 @@
       '</form>';
     openModal(html);
     document.getElementById('cancelForm').addEventListener('click', closeModal);
-    document.getElementById('recordForm').addEventListener('submit', e => {
+    document.getElementById('recordForm').addEventListener('submit', async e => {
       e.preventDefault();
+      const submit = e.currentTarget.querySelector('button[type="submit"]');
       const data = Object.fromEntries(new FormData(e.currentTarget).entries());
-      onSubmit(data);
+      if (submit) submit.disabled = true;
+      try {
+        await onSubmit(data);
+      } finally {
+        if (submit) submit.disabled = false;
+      }
     });
   }
 
@@ -1086,20 +1092,30 @@ function renderSettings() {
       inputField('Email','email',u.email,'email',true) +
       inputField('Department','department',u.department,'text',true) +
       selectField('Role','role',u.role || 'Staff',['Admin','Management','Sales','R&D','Operations','Finance','Staff'],true) +
-      selectField('Status','activeStatus',u.active === false ? 'Inactive' : 'Active',['Active','Inactive'],true);
-    modalForm(id ? 'Edit User' : 'New User','Prepare CRM users and roles before Firebase Authentication is connected.',fields,id ? 'Save User' : 'Create User',data => {
+      selectField('Status','activeStatus',u.active === false ? 'Inactive' : 'Active',['Active','Inactive'],true) +
+      (!id ? inputField('Temporary Password','temporaryPassword','','password',true,true) : '');
+    modalForm(id ? 'Edit Staff' : 'Add Staff','The Master account creates the employee login and assigns access.',fields,id ? 'Save Staff' : 'Create Staff Account',async data => {
       data.active = data.activeStatus === 'Active';
       delete data.activeStatus;
+      const tempPassword = data.temporaryPassword;
+      delete data.temporaryPassword;
       try {
-        id ? CRMData.update('users', id, data) : CRMData.create('users', data);
-        closeModal(); toast(id ? 'User updated.' : 'User created.'); renderRoute();
+        if (id) {
+          CRMData.update('users', id, data);
+        } else {
+          if (!tempPassword || tempPassword.length < 6) throw new Error('Temporary password must be at least 6 characters.');
+          await CRMData.createStaff(data, tempPassword);
+        }
+        closeModal();
+        toast(id ? 'Staff updated.' : 'Staff account created.');
+        renderRoute();
       } catch (error) {
         const form = document.getElementById('recordForm');
         let errorEl = form.querySelector('.form-error');
         if (!errorEl) {
           errorEl = document.createElement('p');
-          errorEl.className = 'form-error';
-          form.appendChild(errorEl);
+          errorEl.className = 'form-error field-span';
+          form.querySelector('.form-grid').appendChild(errorEl);
         }
         errorEl.textContent = error.message || error;
       }
