@@ -23,6 +23,8 @@
   const closeModalButton = document.getElementById('closeModal');
   const toastEl = document.getElementById('toast');
   let charts = [];
+  let calendarCursor = new Date();
+
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
   document.getElementById('sessionRole').textContent =
@@ -41,6 +43,7 @@
     'edit-project-brief':['projects','edit'], 'edit-project-formula':['formulas','edit'], 'edit-project-packaging':['projects','edit'],
     'edit-project-artwork':['projects','edit'], 'edit-project-approval':['projects','approve'], 'edit-project-documents':['projects','edit'],
     'new-user':['users','manage'], 'edit-user':['users','manage'], 'toggle-user':['users','manage'],
+    'new-calendar-event':['calendar','view'], 'edit-calendar-event':['calendar','view'], 'delete-calendar-event':['calendar','view'],
     'export-data':['settings','view'], 'import-data':['settings','manage'], 'reset-data':['settings','manage']
   };
 
@@ -135,6 +138,12 @@
     if (action === 'edit-project-approval') openProjectApprovalForm(id);
     if (action === 'edit-project-documents') openProjectDocumentsForm(id);
     if (action === 'project-tab') switchProjectTab(button.dataset.tab || 'overview');
+    if (action === 'calendar-prev') { calendarCursor.setMonth(calendarCursor.getMonth()-1); renderCalendar(); }
+    if (action === 'calendar-next') { calendarCursor.setMonth(calendarCursor.getMonth()+1); renderCalendar(); }
+    if (action === 'calendar-today') { calendarCursor = new Date(); renderCalendar(); }
+    if (action === 'new-calendar-event') openCalendarEventForm('', button.dataset.date || '');
+    if (action === 'edit-calendar-event') openCalendarEventForm(id);
+    if (action === 'delete-calendar-event') deleteCalendarEvent(id);
     if (action === 'new-user') openUserForm();
     if (action === 'edit-user') openUserForm(id);
     if (action === 'toggle-user') toggleUser(id);
@@ -1029,32 +1038,166 @@ function renderOperations() {
       '<div class="operation-grid">' + (cards || '<p class="empty-text">No active operations.</p>') + '</div>';
   }
 
-  function renderCalendar() {
+  function collectCalendarEvents() {
     const state = CRMData.getState();
     const events = [];
-    state.leads.filter(l=>l.nextActionDate).forEach(l=>events.push({date:l.nextActionDate,type:'Follow-up',title:l.company + ' · ' + l.nextAction,link:'#leads'}));
-    state.projects.filter(p=>p.targetDate).forEach(p=>events.push({date:p.targetDate,type:'Project Target',title:p.id + ' · ' + p.name,link:'#projects/' + p.id}));
-    state.samples.filter(s=>s.feedbackDate).forEach(s=>events.push({date:s.feedbackDate,type:'Sample Feedback',title:s.id + ' · ' + getProjectName(s.projectId),link:'#samples'}));
-    state.quotations.filter(q=>q.validUntil).forEach(q=>events.push({date:q.validUntil,type:'Quotation Expiry',title:q.id + ' · ' + getProjectName(q.projectId),link:'#quotations'}));
-    state.orders.filter(o=>o.committedDate).forEach(o=>events.push({date:o.committedDate,type:'Dispatch / Commit',title:o.id + ' · ' + getCustomerName(o.customerId),link:'#orders'}));
-    state.orders.filter(o=>o.paymentDue).forEach(o=>events.push({date:o.paymentDue,type:'Payment Due',title:o.id + ' · ' + getCustomerName(o.customerId),link:'#orders'}));
-    events.sort((a,b)=>a.date.localeCompare(b.date));
 
-    const grouped = {};
-    events.forEach(e => { (grouped[e.date] ||= []).push(e); });
-    const rows = Object.keys(grouped).map(date =>
-      '<div class="calendar-day"><div class="calendar-date"><strong>' + esc(date.slice(-2)) + '</strong><span>' + esc(new Date(date+'T00:00:00').toLocaleDateString('en-US',{month:'short',weekday:'short'})) + '</span></div><div class="calendar-events">' +
-      grouped[date].map(e => '<a href="' + esc(e.link) + '"><span class="calendar-type">' + esc(e.type) + '</span><strong>' + esc(e.title) + '</strong></a>').join('') +
-      '</div></div>'
-    ).join('');
+    state.leads.filter(l=>l.nextActionDate).forEach(l=>events.push({
+      id:'lead-'+l.id, date:l.nextActionDate, type:'Follow-up',
+      title:l.company + ' · ' + (l.nextAction || 'Follow-up'), link:'#leads', system:true
+    }));
+    state.projects.filter(p=>p.targetDate).forEach(p=>events.push({
+      id:'project-'+p.id, date:p.targetDate, type:'Project',
+      title:p.id + ' · ' + p.name, link:'#projects/' + p.id, system:true
+    }));
+    state.samples.filter(s=>s.feedbackDate).forEach(s=>events.push({
+      id:'sample-'+s.id, date:s.feedbackDate, type:'Sample',
+      title:s.id + ' · ' + getProjectName(s.projectId), link:'#samples', system:true
+    }));
+    state.quotations.filter(q=>q.validUntil).forEach(q=>events.push({
+      id:'quote-'+q.id, date:q.validUntil, type:'Quotation',
+      title:q.id + ' · ' + getProjectName(q.projectId), link:'#quotations', system:true
+    }));
+    state.orders.filter(o=>o.committedDate).forEach(o=>events.push({
+      id:'dispatch-'+o.id, date:o.committedDate, type:'Dispatch',
+      title:o.id + ' · ' + getCustomerName(o.customerId), link:'#orders', system:true
+    }));
+    state.orders.filter(o=>o.paymentDue).forEach(o=>events.push({
+      id:'payment-'+o.id, date:o.paymentDue, type:'Payment',
+      title:o.id + ' · ' + getCustomerName(o.customerId), link:'#orders', system:true
+    }));
 
-    pageRoot.innerHTML = pageHeading('Calendar','One schedule for follow-ups, approvals, samples, production, dispatch and payments.','') +
-      '<section class="panel calendar-panel">' + (rows || '<p class="empty-text">No scheduled events.</p>') + '</section>';
+    (state.calendarEvents || []).forEach(e=>events.push({
+      ...e, type:e.type || 'Schedule', system:false
+    }));
+
+    return events.filter(e=>e.date).sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
   }
 
-  
+  function renderCalendar() {
+    const events = collectCalendarEvents();
+    const year = calendarCursor.getFullYear();
+    const month = calendarCursor.getMonth();
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+    const mondayIndex = (first.getDay() + 6) % 7;
+    const gridStart = new Date(year, month, 1 - mondayIndex);
+    const today = new Date();
+    const todayKey = [
+      today.getFullYear(),
+      String(today.getMonth()+1).padStart(2,'0'),
+      String(today.getDate()).padStart(2,'0')
+    ].join('-');
 
-function renderSettings() {
+    const eventMap = {};
+    events.forEach(e => { (eventMap[e.date] ||= []).push(e); });
+
+    const weekdayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    let cells = '';
+    for (let i=0;i<42;i++) {
+      const d = new Date(gridStart);
+      d.setDate(gridStart.getDate()+i);
+      const key = [
+        d.getFullYear(),
+        String(d.getMonth()+1).padStart(2,'0'),
+        String(d.getDate()).padStart(2,'0')
+      ].join('-');
+      const inMonth = d.getMonth() === month;
+      const dayEvents = eventMap[key] || [];
+      const visible = dayEvents.slice(0,3);
+
+      const eventHtml = visible.map(e => {
+        const label = (e.time ? e.time + ' ' : '') + e.title;
+        if (e.system) {
+          return '<a class="calendar-event calendar-event-system calendar-event-' + esc(String(e.type).toLowerCase()) + '" href="' + esc(e.link || '#calendar') + '" title="' + esc(label) + '"><span>' + esc(e.type) + '</span><strong>' + esc(label) + '</strong></a>';
+        }
+        return '<button class="calendar-event calendar-event-manual calendar-event-' + esc(String(e.type).toLowerCase()) + '" data-action="edit-calendar-event" data-id="' + esc(e.id) + '" title="' + esc(label) + '"><span>' + esc(e.type) + '</span><strong>' + esc(label) + '</strong></button>';
+      }).join('');
+
+      cells += '<div class="calendar-cell ' + (inMonth ? '' : 'outside-month ') + (key===todayKey ? 'today ' : '') + '">' +
+        '<div class="calendar-cell-head"><button class="calendar-day-number" data-action="new-calendar-event" data-date="' + key + '">' + d.getDate() + '</button>' +
+        (key===todayKey ? '<span class="today-label">Today</span>' : '') + '</div>' +
+        '<div class="calendar-cell-events">' + eventHtml +
+        (dayEvents.length>3 ? '<button class="calendar-more" data-action="new-calendar-event" data-date="' + key + '">+' + (dayEvents.length-3) + ' more</button>' : '') +
+        '</div></div>';
+    }
+
+    const monthTitle = first.toLocaleDateString('en-US',{year:'numeric',month:'long'});
+    const monthEvents = events.filter(e=>{
+      const d=new Date(e.date+'T00:00:00');
+      return d.getFullYear()===year && d.getMonth()===month;
+    });
+
+    pageRoot.innerHTML =
+      '<div class="calendar-page-head">' +
+        '<div><p class="eyebrow">JN COS TECH CRM</p><h1>Calendar</h1><p>Follow-ups, approvals, samples, production, dispatch, payments and internal schedules.</p></div>' +
+        '<button class="primary-button" data-action="new-calendar-event"><i data-lucide="plus"></i> Add Schedule</button>' +
+      '</div>' +
+      '<section class="panel calendar-month-panel">' +
+        '<div class="calendar-toolbar">' +
+          '<div class="calendar-nav"><button class="secondary-button icon-only" data-action="calendar-prev" aria-label="Previous month"><i data-lucide="chevron-left"></i></button>' +
+          '<button class="secondary-button" data-action="calendar-today">Today</button>' +
+          '<button class="secondary-button icon-only" data-action="calendar-next" aria-label="Next month"><i data-lucide="chevron-right"></i></button></div>' +
+          '<h2>' + esc(monthTitle) + '</h2>' +
+          '<div class="calendar-summary"><span>' + monthEvents.length + ' schedules</span></div>' +
+        '</div>' +
+        '<div class="calendar-weekdays">' + weekdayNames.map(x=>'<div>'+x+'</div>').join('') + '</div>' +
+        '<div class="calendar-grid">' + cells + '</div>' +
+      '</section>' +
+      '<div class="calendar-legend"><span><i class="legend-dot manual"></i> Manual schedule</span><span><i class="legend-dot system"></i> CRM linked schedule</span></div>';
+
+    lucide.createIcons();
+  }
+
+  function openCalendarEventForm(id, presetDate) {
+    const e = id ? CRMData.get('calendarEvents', id) : {};
+    const fields =
+      inputField('Title','title',e.title,'text',true,true) +
+      inputField('Date','date',e.date || presetDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Time','time',e.time || '09:00','time',false) +
+      selectField('Type','type',e.type || 'Meeting',['Meeting','Internal','Follow-up','Deadline','Production','Dispatch','Payment','Other'],true) +
+      textAreaField('Notes','notes',e.notes,true);
+
+    modalForm(id ? 'Edit Schedule' : 'Add Schedule','Add an internal schedule directly to the CRM calendar.',fields,id ? 'Save Schedule' : 'Add Schedule',data => {
+      data.createdBy = e.createdBy || session.name;
+      data.createdByUid = e.createdByUid || session.uid || session.id || '';
+      if (id) CRMData.update('calendarEvents', id, data);
+      else CRMData.create('calendarEvents', data);
+      closeModal();
+      toast(id ? 'Schedule updated.' : 'Schedule added.');
+      const d = new Date(data.date+'T00:00:00');
+      calendarCursor = new Date(d.getFullYear(),d.getMonth(),1);
+      renderCalendar();
+    });
+
+    if (id) {
+      const actions = document.querySelector('#recordForm .modal-actions');
+      if (actions) {
+        const del = document.createElement('button');
+        del.type='button';
+        del.className='secondary-button calendar-delete-button';
+        del.dataset.action='delete-calendar-event';
+        del.dataset.id=id;
+        del.innerHTML='<i data-lucide="trash-2"></i> Delete';
+        actions.prepend(del);
+        lucide.createIcons();
+      }
+    }
+  }
+
+  function deleteCalendarEvent(id) {
+    if (!confirm('Delete this schedule?')) return;
+    const result = CRMData.remove('calendarEvents', id);
+    if (result && result.ok === false) {
+      toast('This schedule could not be deleted.');
+      return;
+    }
+    closeModal();
+    toast('Schedule deleted.');
+    renderCalendar();
+  }
+
+  function renderSettings() {
     const state = CRMData.getState();
     const canManageUsers = CRMData.can('users','manage');
     const canManageSettings = CRMData.can('settings','manage');
