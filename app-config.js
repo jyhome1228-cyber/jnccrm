@@ -3,6 +3,15 @@
     appName: 'JN COS TECH CRM',
     schemaVersion: 2,
     dataProvider: 'local',
+    firebase: {
+      configured: true,
+      apiKey: 'AIzaSyBjEKdVfgeIxENP8dxwYCQkEzeJB0U5m0M',
+      authDomain: 'jnccrm.firebaseapp.com',
+      projectId: 'jnccrm',
+      storageBucket: 'jnccrm.firebasestorage.app',
+      messagingSenderId: '273933039544',
+      appId: '1:273933039544:web:e27b619df0d840a9c3014d'
+    },
     collections: ['customers','leads','projects','samples','quotations','orders','users','activities','auditLogs'],
     roles: {
       Admin: {
