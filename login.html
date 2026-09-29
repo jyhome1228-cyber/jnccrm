@@ -26,12 +26,16 @@
 
     <section class="login-form-panel">
       <form class="login-card" id="loginForm">
-        <p class="eyebrow">WELCOME BACK</p>
-        <h2>Sign in to CRM</h2>
-        <p class="login-help">Use your company account to continue.</p>
+        <p class="eyebrow">JN COS TECH CRM</p>
+        <h2>Master / Staff Sign in</h2>
+        <p class="login-help">The Master account creates staff accounts and assigns access before employees can sign in.</p>
+        <div class="master-login-note">
+          <strong>Master account</strong>
+          <span>admin@jncostech.com</span>
+        </div>
 
         <label>Email
-          <input id="loginEmail" type="email" placeholder="name@jncostech.com" required />
+          <input id="loginEmail" type="email" placeholder="admin@jncostech.com" required />
         </label>
         <label>Password
           <input id="loginPassword" type="password" placeholder="Enter your password" required minlength="4" />
@@ -44,7 +48,7 @@
 
         <button class="primary-button full" type="submit">Sign in</button>
         <p class="form-error hidden" id="loginError"></p>
-        <p class="login-note">Phase 1 local authentication. Firebase / Supabase authentication can replace this without changing the UI flow.</p>
+        <p class="login-note">Prototype sign-in uses registered CRM users only. Password validation will switch to Firebase Authentication.</p>
       </form>
     </section>
   </main>
