@@ -72,13 +72,11 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // A signed-in user may read only their own profile before role checks.
-      // Admin / Management may read staff profiles.
-      allow read: if signedIn()
-        && (
-          request.auth.uid == userId
-          || management()
-        );
+      // Every signed-in user may read their own profile first.
+      allow get: if signedIn() && request.auth.uid == userId;
+
+      // Admin / Management may browse staff profiles.
+      allow get, list: if management();
 
       // Only the Master/Admin may create, edit or deactivate staff profiles.
       allow create, update, delete: if admin();
