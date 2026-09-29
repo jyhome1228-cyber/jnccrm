@@ -1,0 +1,119 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function activeUser() {
+      return signedIn() && currentUser().data.active == true;
+    }
+
+    function roleIs(role) {
+      return activeUser() && currentUser().data.role == role;
+    }
+
+    function oneOfRoles(roles) {
+      return activeUser() && currentUser().data.role in roles;
+    }
+
+    function admin() {
+      return roleIs('Admin');
+    }
+
+    function management() {
+      return oneOfRoles(['Admin', 'Management']);
+    }
+
+    function salesOrManagement() {
+      return oneOfRoles(['Admin', 'Management', 'Sales']);
+    }
+
+    function rdOrManagement() {
+      return oneOfRoles(['Admin', 'Management', 'R&D']);
+    }
+
+    function operationsOrManagement() {
+      return oneOfRoles(['Admin', 'Management', 'Operations']);
+    }
+
+    function financeOrManagement() {
+      return oneOfRoles(['Admin', 'Management', 'Finance']);
+    }
+
+    match /users/{userId} {
+      allow read: if activeUser() && (management() || request.auth.uid == userId);
+      allow create, update, delete: if admin();
+    }
+
+    match /customers/{customerId} {
+      allow read: if activeUser();
+      allow create, update: if salesOrManagement();
+      allow delete: if admin();
+    }
+
+    match /leads/{leadId} {
+      allow read: if oneOfRoles(['Admin','Management','Sales','R&D']);
+      allow create, update: if salesOrManagement();
+      allow delete: if oneOfRoles(['Admin','Management','Sales']);
+    }
+
+    match /projects/{projectId} {
+      allow read: if activeUser();
+      allow create: if salesOrManagement();
+      allow update: if oneOfRoles(['Admin','Management','Sales','R&D']);
+      allow delete: if admin();
+    }
+
+    // Keep confidential formula content separate from general project data.
+    match /formulas/{formulaId} {
+      allow read, create, update: if rdOrManagement();
+      allow delete: if admin();
+    }
+
+    match /samples/{sampleId} {
+      allow read: if activeUser();
+      allow create, update: if oneOfRoles(['Admin','Management','R&D','Sales']);
+      allow delete: if oneOfRoles(['Admin','Management','R&D']);
+    }
+
+    match /quotations/{quotationId} {
+      allow read: if oneOfRoles(['Admin','Management','Sales','Finance','Operations']);
+      allow create, update: if oneOfRoles(['Admin','Management','Sales','Finance']);
+      allow delete: if management();
+    }
+
+    match /orders/{orderId} {
+      allow read: if activeUser();
+      allow create: if oneOfRoles(['Admin','Management','Sales']);
+      allow update: if oneOfRoles(['Admin','Management','Operations','Finance']);
+      allow delete: if admin();
+    }
+
+    match /activities/{activityId} {
+      allow read: if activeUser();
+      allow create: if activeUser();
+      allow update, delete: if false;
+    }
+
+    match /auditLogs/{auditId} {
+      allow read: if management();
+      allow create: if activeUser();
+      allow update, delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if management();
+      allow write: if admin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
