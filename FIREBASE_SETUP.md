@@ -88,9 +88,30 @@ samples/{sampleId}/
 orders/{orderId}/
 ```
 
-Before real confidential files are uploaded, replace the broad signed-in Storage rule with role-aware custom claims.
+Storage Rules are already drafted to use Firebase Auth custom claims for `role` and `active`.
 
-### 6. Implement firebase-adapter.js
+Before real file uploads:
+- sync each user's Firestore role to Firebase Auth custom claims
+- force token refresh after a role changes
+- verify Sales cannot read `projects/{projectId}/formula/`
+- verify inactive users have `active: false` in their claims
+
+### 6. Sync Firebase Auth custom claims
+
+Storage Rules use:
+
+```json
+{
+  "role": "Admin | Management | Sales | R&D | Operations | Finance | Staff",
+  "active": true
+}
+```
+
+When an administrator changes a user's role or active status, a trusted server/Admin SDK process must update these claims.
+
+Do not allow the browser client to set its own claims.
+
+### 7. Implement firebase-adapter.js
 The adapter must expose the same methods currently used by `CRMData`:
 
 - ready()
@@ -111,7 +132,7 @@ The adapter must expose the same methods currently used by `CRMData`:
 
 The UI should not call Firestore directly.
 
-### 7. Migrate local test data
+### 8. Migrate local test data
 In Settings:
 1. Export JSON
 2. Convert / validate records
@@ -119,7 +140,7 @@ In Settings:
 4. Verify relationships
 5. Keep exported JSON as rollback backup
 
-### 8. Switch provider
+### 9. Switch provider
 After the Firebase adapter is tested:
 
 In `app-config.js`:
