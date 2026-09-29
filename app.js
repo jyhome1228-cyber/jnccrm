@@ -18,7 +18,7 @@
   let charts = [];
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
-  document.getElementById('sessionRole').textContent = (session.department || 'General') + ' · ' + (session.role || 'Staff');
+  document.getElementById('sessionRole').textContent = session.role === 'Admin' ? 'Master Account' : ((session.department || 'General') + ' · ' + (session.role || 'Staff'));
   document.getElementById('sessionAvatar').textContent = initials(session.name || 'JN COS');
 
   const actionPermissions = {
@@ -335,61 +335,126 @@
     openModal('<p class="eyebrow">NOTIFICATIONS</p><h2>Items requiring attention</h2><div class="notification-list">' + (items.join('') || '<p class="empty-text">No pending notifications.</p>') + '</div>');
   }
 
-  function renderDashboard() {
+  
+function getDashboardScope() {
     const state = CRMData.getState();
+    const role = session.role || 'Staff';
+    if (role === 'Admin' || role === 'Management') return state;
+
+    let leads = state.leads || [];
+    let projects = state.projects || [];
+    let samples = state.samples || [];
+    let quotations = state.quotations || [];
+    let orders = state.orders || [];
+    let activities = state.activities || [];
+
+    if (role === 'Sales') {
+      leads = leads.filter(x => x.owner === session.name);
+      projects = projects.filter(x => x.salesOwner === session.name);
+    } else if (role === 'R&D') {
+      leads = [];
+      projects = projects.filter(x => x.rdOwner === session.name || x.formulaOwner === session.name);
+    } else if (role === 'Operations') {
+      leads = [];
+      const projectIds = new Set(orders.map(x => x.projectId));
+      projects = projects.filter(x => projectIds.has(x.id));
+    } else if (role === 'Finance') {
+      leads = [];
+      const projectIds = new Set([...orders.map(x => x.projectId), ...quotations.map(x => x.projectId)]);
+      projects = projects.filter(x => projectIds.has(x.id));
+    } else {
+      leads = leads.filter(x => x.owner === session.name);
+      projects = projects.filter(x => x.salesOwner === session.name || x.rdOwner === session.name);
+    }
+
+    const projectIds = new Set(projects.map(x => x.id));
+    samples = samples.filter(x => projectIds.has(x.projectId) || (role === 'R&D' && x.rdOwner === session.name));
+    quotations = quotations.filter(x => projectIds.has(x.projectId) || role === 'Finance');
+    orders = orders.filter(x => projectIds.has(x.projectId) || role === 'Operations' || role === 'Finance');
+
+    const relatedTokens = new Set([
+      ...projects.map(x => x.id),
+      ...orders.map(x => x.id),
+      ...quotations.map(x => x.id),
+      ...samples.map(x => x.id)
+    ]);
+    activities = activities.filter(a => {
+      const meta = String(a.meta || '');
+      for (const token of relatedTokens) if (meta.includes(token)) return true;
+      return false;
+    });
+
+    return { ...state, leads, projects, samples, quotations, orders, activities };
+  }
+
+  function renderDashboard() {
+    const state = getDashboardScope();
     const today = new Date().toISOString().slice(0,10);
+    const isMaster = session.role === 'Admin';
+    const isManagement = session.role === 'Management';
+
     const newLeads = state.leads.filter(l => l.status === 'New').length;
     const activeProjects = state.projects.filter(p => !/Approved|Cancelled/.test(p.status)).length;
-    const feedbackWaiting = state.samples.filter(s => /Feedback Waiting|Revision/.test(s.status)).length;
-    const approvalPending = state.projects.filter(p => /Approval|Feedback|Pending/.test(p.approvalStatus)).length;
-    const activeOrders = state.orders.length;
-    const readyDispatch = state.orders.filter(o => /Ready/.test(o.dispatchStatus)).length;
+    const approvalPending = state.projects.filter(p => /Approval|Feedback|Pending|Revision/.test(p.approvalStatus || '')).length;
+    const activeOrders = state.orders.filter(o => !/Delivered/.test(o.dispatchStatus || '')).length;
+    const readyDispatch = state.orders.filter(o => o.dispatchStatus === 'Ready' || o.productionStatus === 'Ready to Dispatch').length;
     const overdue = state.orders.filter(o => o.paymentStatus === 'Overdue').length;
+
     const schedule = [];
-
-    state.leads.filter(l => l.nextActionDate).forEach(l => schedule.push({date:l.nextActionDate,title:l.company + ' · ' + l.nextAction,meta:'Lead follow-up'}));
-    state.projects.filter(p => p.targetDate).forEach(p => schedule.push({date:p.targetDate,title:p.id + ' · ' + p.name,meta:'Project target'}));
-    state.orders.filter(o => o.committedDate).forEach(o => schedule.push({date:o.committedDate,title:o.id + ' · Dispatch',meta:getCustomerName(o.customerId)}));
-
+    state.leads.filter(l => l.nextActionDate).forEach(l => schedule.push({date:l.nextActionDate,type:'Follow-up',title:l.company,meta:l.nextAction || 'Next action'}));
+    state.samples.filter(s => s.feedbackDate).forEach(s => schedule.push({date:s.feedbackDate,type:'Sample',title:s.id,meta:getProjectName(s.projectId)}));
+    state.projects.filter(p => p.targetDate).forEach(p => schedule.push({date:p.targetDate,type:'Project',title:p.id,meta:p.name}));
+    state.orders.filter(o => o.committedDate).forEach(o => schedule.push({date:o.committedDate,type:'Dispatch',title:o.id,meta:getCustomerName(o.customerId)}));
     schedule.sort((a,b) => a.date.localeCompare(b.date));
     const upcoming = schedule.filter(i => i.date >= today).slice(0,5);
 
-    const projectRows = state.projects.slice(0,5).map(p =>
-      '<div class="attention-item"><span>' + esc(p.id) + '</span><div><strong>' + esc(getCustomerName(p.customerId)) + '</strong><p>' + esc(p.name) + '</p></div>' + badge(p.approvalStatus || p.status) + '<small>' + esc(p.targetDate) + '</small></div>'
-    ).join('');
+    const attention = [];
+    state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).forEach(l => attention.push({date:l.nextActionDate,label:'Follow-up',title:l.company,meta:l.nextAction || 'Follow-up required',tone:'warning'}));
+    state.samples.filter(s => s.feedbackDate && s.feedbackDate <= today && /Waiting|Revision/.test(s.status)).forEach(s => attention.push({date:s.feedbackDate,label:'Sample',title:s.id,meta:s.status,tone:'warning'}));
+    state.projects.filter(p => p.targetDate && p.targetDate <= today && !/Approved|Cancelled/.test(p.status)).forEach(p => attention.push({date:p.targetDate,label:'Project',title:p.id,meta:p.status,tone:'danger'}));
+    state.orders.filter(o => o.committedDate && o.committedDate <= today && o.dispatchStatus !== 'Delivered').forEach(o => attention.push({date:o.committedDate,label:'Order',title:o.id,meta:'Dispatch ' + (o.dispatchStatus || 'pending'),tone:'danger'}));
+    state.orders.filter(o => o.paymentDue && o.paymentDue <= today && o.paymentStatus !== 'Paid').forEach(o => attention.push({date:o.paymentDue,label:'Payment',title:o.id,meta:o.paymentStatus,tone:'danger'}));
+    attention.sort((a,b) => a.date.localeCompare(b.date));
 
-    const activityRows = state.activities.slice(0,5).map(a =>
-      '<div><span class="activity-icon sky"><i data-lucide="history"></i></span><p><strong>' + esc(a.text) + '</strong><small>' + esc(a.meta) + ' · ' + fmtDate(a.createdAt) + '</small></p></div>'
-    ).join('');
+    const statusCounts = {};
+    state.projects.forEach(p => { statusCounts[p.status] = (statusCounts[p.status] || 0) + 1; });
+    const statusEntries = Object.entries(statusCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const maxStatus = Math.max(1,...statusEntries.map(x=>x[1]));
+
+    const dashboardTitle = isMaster ? 'Company Overview' : (isManagement ? 'Management Overview' : 'My Work Today');
+    const dashboardCopy = isMaster || isManagement
+      ? 'See the overall business status and what needs attention today.'
+      : 'See your assigned work, upcoming schedule and items requiring action.';
+    const action = isMaster
+      ? '<button class="primary-button" onclick="location.hash=\'#settings\'"><i data-lucide="users"></i> Staff Management</button>'
+      : '<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>';
 
     pageRoot.innerHTML =
-      pageHeading('Good morning, ' + (session.name.split(' ')[0] || session.name) + '.', 'Review what needs attention and continue today\'s work.',
-        '<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>') +
-      '<div class="stat-grid">' +
-        statCard('user-plus','blue','New Leads',newLeads,'Current pipeline') +
+      pageHeading(dashboardTitle,dashboardCopy,action) +
+      '<div class="stat-grid compact-stats">' +
+        statCard('user-plus','blue','New Leads',newLeads,'New enquiries') +
         statCard('folder-kanban','green','Active Projects',activeProjects,'In progress') +
-        statCard('flask-conical','violet','Sample Feedback',feedbackWaiting,'Waiting / revision') +
-        statCard('badge-check','orange','Approval Pending',approvalPending,'Needs review') +
+        statCard('badge-check','orange','Waiting Approval',approvalPending,'Needs review') +
         statCard('shopping-cart','teal','Active Orders',activeOrders,'Open orders') +
-        statCard('truck','sky','Ready to Dispatch',readyDispatch,'Operations') +
+        statCard('truck','sky','Ready to Dispatch',readyDispatch,'Ready / near ready') +
         statCard('credit-card','red','Payment Overdue',overdue,'Needs follow-up') +
-        statCard('users','navy','Customers',state.customers.length,'Total accounts') +
       '</div>' +
-      '<div class="dashboard-grid">' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="calendar-clock"></i><h2>Upcoming Schedule</h2></div><button onclick="location.hash=\'#calendar\'">View all</button></div><div class="timeline">' +
-          (upcoming.map((i,idx) => '<div class="timeline-item"><time>' + esc(i.date.slice(5)) + '</time><span class="dot ' + ['blue-dot','green-dot','orange-dot','violet-dot'][idx%4] + '"></span><div><strong>' + esc(i.title) + '</strong><p>' + esc(i.meta) + '</p></div><i data-lucide="chevron-right"></i></div>').join('') || '<p class="empty-text">No upcoming schedule.</p>') +
+      '<div class="dashboard-simple-grid">' +
+        '<section class="panel simple-panel"><div class="panel-head"><div><i data-lucide="calendar-clock"></i><h2>Today & Upcoming</h2></div><button onclick="location.hash=\'#calendar\'">Calendar</button></div><div class="timeline">' +
+          (upcoming.map((i,idx) => '<div class="timeline-item"><time>' + esc(i.date.slice(5)) + '</time><span class="dot ' + ['blue-dot','green-dot','orange-dot','violet-dot'][idx%4] + '"></span><div><strong>' + esc(i.title) + '</strong><p>' + esc(i.type + ' · ' + i.meta) + '</p></div><i data-lucide="chevron-right"></i></div>').join('') || '<p class="empty-text">No upcoming schedule.</p>') +
         '</div></section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="folder-kanban"></i><h2>Projects Requiring Attention</h2></div><button onclick="location.hash=\'#projects\'">View all</button></div><div class="attention-list">' + projectRows + '</div></section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="history"></i><h2>Recent Activity</h2></div></div><div class="activity-list">' + activityRows + '</div></section>' +
+        '<section class="panel simple-panel"><div class="panel-head"><div><i data-lucide="triangle-alert"></i><h2>Needs Attention</h2></div></div><div class="attention-simple-list">' +
+          (attention.slice(0,5).map(i => '<div><span class="attention-type">' + esc(i.label) + '</span><div><strong>' + esc(i.title) + '</strong><p>' + esc(i.meta) + '</p></div><small>' + esc(i.date) + '</small></div>').join('') || '<div class="all-clear"><i data-lucide="circle-check"></i><span>No overdue items right now.</span></div>') +
+        '</div></section>' +
       '</div>' +
-      '<div class="analytics-grid">' +
-        '<section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="pie-chart"></i><h2>Project Status</h2></div></div><canvas id="projectChart"></canvas></section>' +
-        '<section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="bar-chart-3"></i><h2>Lead Pipeline</h2></div></div><canvas id="leadChart"></canvas></section>' +
-        '<section class="panel chart-panel"><div class="panel-head"><div><i data-lucide="circle-dollar-sign"></i><h2>Payment Status</h2></div></div><canvas id="paymentChart"></canvas></section>' +
-      '</div>' +
-      renderRecentLeads(state.leads.slice(0,5));
-
-    renderDashboardCharts(state);
+      '<div class="dashboard-simple-grid lower-grid">' +
+        '<section class="panel simple-panel"><div class="panel-head"><div><i data-lucide="chart-no-axes-column-increasing"></i><h2>Project Status</h2></div><button onclick="location.hash=\'#projects\'">View projects</button></div><div class="status-bars">' +
+          (statusEntries.map(([label,count]) => '<div class="status-bar-row"><span>' + esc(label) + '</span><div class="status-track"><i style="width:' + Math.round((count/maxStatus)*100) + '%"></i></div><strong>' + count + '</strong></div>').join('') || '<p class="empty-text">No project data.</p>') +
+        '</div></section>' +
+        '<section class="panel simple-panel"><div class="panel-head"><div><i data-lucide="history"></i><h2>Recent Activity</h2></div></div><div class="activity-list compact-activity">' +
+          ((state.activities || []).slice(0,5).map(a => '<div><span class="activity-icon sky"><i data-lucide="history"></i></span><p><strong>' + esc(a.text) + '</strong><small>' + esc(a.meta) + ' · ' + fmtDate(a.createdAt) + '</small></p></div>').join('') || '<p class="empty-text">No recent activity.</p>') +
+        '</div></section>' +
+      '</div>';
   }
 
   function statCard(icon, tone, title, value, note) {
@@ -967,36 +1032,48 @@ function renderOperations() {
   }
 
   
+
 function renderSettings() {
     const state = CRMData.getState();
     const canManageUsers = CRMData.can('users','manage');
     const canManageSettings = CRMData.can('settings','manage');
+    const activeUsers = state.users.filter(u => u.active !== false).length;
+
     const userRows = state.users.map(u =>
-      '<tr><td><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></td><td>' + esc(u.department) + '</td><td>' + badge(u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td><td class="actions-cell">' +
+      '<tr><td><div class="staff-name-cell"><span class="staff-avatar">' + esc(initials(u.name)) + '</span><div><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></div></div></td><td>' + esc(u.department) + '</td><td>' + badge(u.role === 'Admin' ? 'Master' : u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td><td class="actions-cell">' +
         (canManageUsers ? '<button class="row-action" data-action="edit-user" data-id="' + esc(u.id) + '"><i data-lucide="pencil"></i></button><button class="row-action" title="Toggle Active" data-action="toggle-user" data-id="' + esc(u.id) + '"><i data-lucide="power"></i></button>' : '') +
       '</td></tr>'
     ).join('');
 
-    const audits = (state.auditLogs || []).slice(0,30).map(log =>
-      '<tr><td>' + fmtDate(log.createdAt) + '</td><td><strong>' + esc((log.actor && log.actor.name) || 'System') + '</strong><small class="cell-sub">' + esc((log.actor && log.actor.role) || '') + '</small></td><td>' + badge(log.action) + '</td><td>' + esc(log.collection) + '</td><td>' + esc(log.recordId) + '</td></tr>'
+    const audits = (state.auditLogs || []).slice(0,20).map(log =>
+      '<tr><td>' + fmtDate(log.createdAt) + '</td><td>' + esc((log.actor && log.actor.name) || 'System') + '</td><td>' + badge(log.action) + '</td><td>' + esc(log.collection) + '</td><td>' + esc(log.recordId) + '</td></tr>'
     ).join('');
 
     pageRoot.innerHTML =
-      pageHeading('Settings','Users, permissions, data readiness and migration tools.',
-        (canManageUsers ? '<button class="primary-button" data-action="new-user"><i data-lucide="user-plus"></i> New User</button>' : '')) +
-      '<div class="record-grid">' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="database"></i><h2>Data Layer</h2></div>' + badge(CRMData.providerName === 'local' ? 'Local Ready' : CRMData.providerName) + '</div><div class="detail-grid compact">' +
-          detailItem('Provider',CRMData.providerName) + detailItem('Schema Version',state.schemaVersion || '—') + detailItem('Company',state.settings.companyName) + detailItem('Currency',state.settings.defaultCurrency) +
-        '</div><p class="body-copy small-copy">The UI now uses a provider interface, so Firebase can replace the local adapter without rewriting the CRM screens.</p></section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Role Model</h2></div></div><div class="tag-list">' + ['Admin','Management','Sales','R&D','Operations','Finance','Staff'].map(r=>'<span>'+r+'</span>').join('') + '</div><p class="body-copy small-copy">Frontend permission checks are active. Firebase Security Rules will enforce the same permissions on the backend.</p></section>' +
+      pageHeading('Staff & Settings','Manage staff accounts and keep the system configuration simple.',
+        canManageUsers ? '<button class="primary-button" data-action="new-user"><i data-lucide="user-plus"></i> Add Staff</button>' : '') +
+      '<div class="staff-summary-grid">' +
+        '<div><span>Total Staff</span><strong>' + state.users.length + '</strong></div>' +
+        '<div><span>Active</span><strong>' + activeUsers + '</strong></div>' +
+        '<div><span>Master / Management</span><strong>' + state.users.filter(u => u.role === 'Admin' || u.role === 'Management').length + '</strong></div>' +
       '</div>' +
-      '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="users"></i><h2>Users</h2></div><span class="count-pill">' + state.users.length + '</span></div><div class="table-wrap"><table><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
-      '<div class="record-grid settings-tools">' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="download"></i><h2>Backup & Migration</h2></div></div><p class="body-copy">Export the current local dataset before connecting Firebase. The same JSON can be used as a migration source.</p><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export JSON</button>' + (canManageSettings ? '<button class="secondary-button" data-action="import-data"><i data-lucide="upload"></i> Import JSON</button>' : '') + '</div></section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="cloud-cog"></i><h2>Firebase Readiness</h2></div></div><div class="check-list"><span class="done"><i data-lucide="check"></i> Provider abstraction</span><span class="done"><i data-lucide="check"></i> Role model</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup / import</span><span><i data-lucide="circle"></i> Firebase credentials</span><span><i data-lucide="circle"></i> Deploy security rules</span></div></section>' +
+      '<section class="panel table-panel staff-panel"><div class="panel-head"><div><i data-lucide="users-round"></i><h2>Staff Management</h2></div><span class="count-pill">' + state.users.length + '</span></div><p class="panel-description">The Master account creates staff accounts, assigns a role and can deactivate access when needed.</p><div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
+      '<div class="record-grid settings-compact-grid">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Access Roles</h2></div></div><div class="role-brief-list">' +
+          '<div><strong>Master</strong><span>Full access + staff management</span></div>' +
+          '<div><strong>Management</strong><span>Company-wide operational access</span></div>' +
+          '<div><strong>Sales</strong><span>Customers, leads, projects, quotations</span></div>' +
+          '<div><strong>R&D</strong><span>Projects, formula, samples</span></div>' +
+          '<div><strong>Operations</strong><span>Orders, production, QC, dispatch</span></div>' +
+          '<div><strong>Finance</strong><span>Quotations, orders, payments</span></div>' +
+        '</div></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="database"></i><h2>System & Backup</h2></div></div><div class="detail-grid compact">' +
+          detailItem('Data Provider',CRMData.providerName) + detailItem('Schema',state.schemaVersion || '—') + detailItem('Currency',state.settings.defaultCurrency) + detailItem('Company',state.settings.companyName) +
+        '</div><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export Backup</button>' + (canManageSettings ? '<button class="secondary-button" data-action="import-data"><i data-lucide="upload"></i> Import</button>' : '') + '</div></section>' +
       '</div>' +
-      '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="scroll-text"></i><h2>Audit Log</h2></div><span class="count-pill">' + (state.auditLogs || []).length + '</span></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></section>' +
-      (canManageSettings ? '<section class="panel danger-zone"><div><h2>Local Demo Data</h2><p>Reset the browser dataset to the starter records. This action is intended for testing only.</p></div><button class="secondary-button" data-action="reset-data">Reset Demo Data</button></section>' : '');
+      '<details class="panel settings-details"><summary><span><i data-lucide="cloud-cog"></i><strong>Firebase Readiness</strong></span><small>Technical setup</small></summary><div class="check-list settings-details-body"><span class="done"><i data-lucide="check"></i> Provider abstraction</span><span class="done"><i data-lucide="check"></i> Role model</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup / import</span><span><i data-lucide="circle"></i> Firebase credentials</span><span><i data-lucide="circle"></i> Deploy security rules</span></div></details>' +
+      '<details class="panel settings-details"><summary><span><i data-lucide="scroll-text"></i><strong>Audit Log</strong></span><small>' + (state.auditLogs || []).length + ' records</small></summary><div class="table-wrap settings-details-body"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></details>' +
+      (canManageSettings ? '<section class="panel danger-zone compact-danger"><div><h2>Reset Local Demo</h2><p>Use only while testing before Firebase is connected.</p></div><button class="secondary-button" data-action="reset-data">Reset</button></section>' : '');
   }
 
   function openUserForm(id) {
