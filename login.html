@@ -65,10 +65,10 @@
     </section>
   </main>
 
-  <script src="./app-config.js"></script>
-  <script src="./crm-store.js"></script>
-  <script src="./firebase-adapter.js"></script>
-  <script src="./data-provider.js"></script>
+  <script src="./app-config.js?v=20260929-1618"></script>
+  <script src="./crm-store.js?v=20260929-1618"></script>
+  <script src="./firebase-adapter.js?v=20260929-1618"></script>
+  <script src="./data-provider.js?v=20260929-1618"></script>
   <script>
     (async () => {
       const error = document.getElementById('loginError');
@@ -110,7 +110,8 @@
           } else if (code.includes('permission-denied')) {
             error.textContent = 'Firebase login succeeded, but Firestore denied access to the CRM profile. Check the published Firestore Rules and users/{UID} document.';
           } else {
-            error.textContent = err.message || 'Unable to sign in.';
+            const codeText = err && err.code ? ' (' + err.code + ')' : '';
+            error.textContent = (err.message || 'Unable to sign in.') + codeText;
           }
           error.classList.remove('hidden');
         } finally {
