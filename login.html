@@ -65,15 +65,25 @@
     </section>
   </main>
 
-  <script src="./app-config.js?v=20260929-1618"></script>
-  <script src="./crm-store.js?v=20260929-1618"></script>
-  <script src="./firebase-adapter.js?v=20260929-1618"></script>
-  <script src="./data-provider.js?v=20260929-1618"></script>
+  <script src="./app-config.js?v=20260929-1625"></script>
+  <script src="./crm-store.js?v=20260929-1625"></script>
+  <script src="./firebase-adapter.js?v=20260929-1625"></script>
+  <script src="./data-provider.js?v=20260929-1625"></script>
   <script>
     (async () => {
       const error = document.getElementById('loginError');
       const form = document.getElementById('loginForm');
+      const emailInput = document.getElementById('loginEmail');
+      const passwordInput = document.getElementById('loginPassword');
       const submit = form.querySelector('button[type="submit"]');
+
+      const savedEmail = sessionStorage.getItem('jnc-login-email');
+      if (savedEmail) emailInput.value = savedEmail;
+
+      function showError(message) {
+        error.textContent = message;
+        error.classList.remove('hidden');
+      }
 
       try {
         await CRMData.ready();
@@ -82,59 +92,69 @@
           return;
         }
       } catch (e) {
-        console.warn(e);
+        // Keep the login form usable even when a stale Firebase session/profile failed.
+        console.warn('Auth bootstrap:', e);
+        showError('Please sign in again.');
       }
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        e.stopPropagation();
+
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        sessionStorage.setItem('jnc-login-email', email);
+
         error.classList.add('hidden');
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        if (!email || password.length < 4) {
-          error.textContent = 'Please enter a valid email and password.';
-          error.classList.remove('hidden');
+
+        if (!email || password.length < 6) {
+          showError('Please enter your email and Firebase password.');
           return;
         }
 
         submit.disabled = true;
+        emailInput.readOnly = true;
+        passwordInput.readOnly = true;
         submit.textContent = 'Signing in...';
+
         try {
-          await CRMData.signIn(email, password);
-          location.replace('./index.html#dashboard');
+          const signedIn = await CRMData.signIn(email, password);
+          if (!signedIn || !signedIn.uid) throw new Error('CRM session could not be created.');
+          sessionStorage.removeItem('jnc-login-email');
+          location.assign('./index.html#dashboard');
         } catch (err) {
+          console.error('Login error:', err);
           const code = err && err.code ? err.code : '';
-          if (code.includes('invalid-credential') || code.includes('invalid-login-credentials')) {
-            error.textContent = 'Email or password is incorrect.';
+          if (code.includes('invalid-credential') || code.includes('invalid-login-credentials') || code.includes('wrong-password')) {
+            showError('Email or password is incorrect. (' + code + ')');
           } else if (code === 'crm/profile-missing') {
-            error.textContent = 'Firebase login succeeded, but the CRM user profile is missing. Check the users/{UID} document.';
+            showError('Login succeeded, but the Firestore users/{UID} profile is missing.');
           } else if (code.includes('permission-denied')) {
-            error.textContent = 'Firebase login succeeded, but Firestore denied access to the CRM profile. Check the published Firestore Rules and users/{UID} document.';
+            showError('Login succeeded, but Firestore denied the CRM profile. Check Rules and users/{UID}. (' + code + ')');
           } else {
-            const codeText = err && err.code ? ' (' + err.code + ')' : '';
-            error.textContent = (err.message || 'Unable to sign in.') + codeText;
+            showError((err.message || 'Unable to sign in.') + (code ? ' (' + code + ')' : ''));
           }
-          error.classList.remove('hidden');
         } finally {
           submit.disabled = false;
+          emailInput.readOnly = false;
+          passwordInput.readOnly = false;
           submit.textContent = 'Sign in';
+          passwordInput.focus();
         }
       });
 
       document.getElementById('forgotLink').addEventListener('click', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('loginEmail').value.trim();
+        const email = emailInput.value.trim();
         if (!email) {
-          error.textContent = 'Enter your email first, then select Forgot password.';
-          error.classList.remove('hidden');
+          showError('Enter your email first, then select Forgot password.');
           return;
         }
         try {
           await CRMData.sendPasswordReset(email);
-          error.textContent = 'Password reset email sent.';
-          error.classList.remove('hidden');
+          showError('Password reset email sent.');
         } catch (err) {
-          error.textContent = err.message || 'Unable to send reset email.';
-          error.classList.remove('hidden');
+          showError((err.message || 'Unable to send reset email.') + (err.code ? ' (' + err.code + ')' : ''));
         }
       });
     })();
