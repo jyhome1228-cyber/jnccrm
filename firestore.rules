@@ -2,8 +2,14 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function signedIn() {
       return request.auth != null;
+    }
+
+    function userProfileExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function currentUser() {
@@ -11,15 +17,18 @@ service cloud.firestore {
     }
 
     function activeUser() {
-      return signedIn() && currentUser().data.active == true;
+      return userProfileExists()
+        && currentUser().data.active == true;
     }
 
     function roleIs(role) {
-      return activeUser() && currentUser().data.role == role;
+      return activeUser()
+        && currentUser().data.role == role;
     }
 
     function oneOfRoles(roles) {
-      return activeUser() && currentUser().data.role in roles;
+      return activeUser()
+        && currentUser().data.role in roles;
     }
 
     function admin() {
@@ -38,18 +47,40 @@ service cloud.firestore {
       return oneOfRoles(['Admin', 'Management', 'R&D']);
     }
 
-    function operationsOrManagement() {
-      return oneOfRoles(['Admin', 'Management', 'Operations']);
+    function orderOperationalFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'readiness',
+        'productionStatus',
+        'qcStatus',
+        'dispatchStatus',
+        'tracking',
+        'operationsNotes',
+        'committedDate',
+        'updatedAt'
+      ]);
     }
 
-    function financeOrManagement() {
-      return oneOfRoles(['Admin', 'Management', 'Finance']);
+    function orderFinanceFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'total',
+        'advance',
+        'balance',
+        'paymentDue',
+        'paymentStatus',
+        'updatedAt'
+      ]);
     }
 
     match /users/{userId} {
-      // Bootstrap rule: an authenticated user must be able to read their own
-      // profile before role/active checks can be evaluated for other data.
-      allow read: if signedIn() && (request.auth.uid == userId || management());
+      // A signed-in user may read only their own profile before role checks.
+      // Admin / Management may read staff profiles.
+      allow read: if signedIn()
+        && (
+          request.auth.uid == userId
+          || management()
+        );
+
+      // Only the Master/Admin may create, edit or deactivate staff profiles.
       allow create, update, delete: if admin();
     }
 
@@ -60,19 +91,38 @@ service cloud.firestore {
     }
 
     match /leads/{leadId} {
-      allow read: if oneOfRoles(['Admin','Management','Sales','R&D']);
+      allow read: if oneOfRoles([
+        'Admin',
+        'Management',
+        'Sales',
+        'R&D'
+      ]);
+
       allow create, update: if salesOrManagement();
-      allow delete: if oneOfRoles(['Admin','Management','Sales']);
+
+      allow delete: if oneOfRoles([
+        'Admin',
+        'Management',
+        'Sales'
+      ]);
     }
 
     match /projects/{projectId} {
       allow read: if activeUser();
+
       allow create: if salesOrManagement();
-      allow update: if oneOfRoles(['Admin','Management','Sales','R&D']);
+
+      allow update: if oneOfRoles([
+        'Admin',
+        'Management',
+        'Sales',
+        'R&D'
+      ]);
+
       allow delete: if admin();
     }
 
-    // Keep confidential formula content separate from general project data.
+    // Confidential formula records are separated from general Project data.
     match /formulas/{formulaId} {
       allow read, create, update: if rdOrManagement();
       allow delete: if admin();
@@ -80,32 +130,78 @@ service cloud.firestore {
 
     match /samples/{sampleId} {
       allow read: if activeUser();
-      allow create, update: if oneOfRoles(['Admin','Management','R&D','Sales']);
-      allow delete: if oneOfRoles(['Admin','Management','R&D']);
+
+      allow create, update: if oneOfRoles([
+        'Admin',
+        'Management',
+        'R&D',
+        'Sales'
+      ]);
+
+      allow delete: if oneOfRoles([
+        'Admin',
+        'Management',
+        'R&D'
+      ]);
     }
 
     match /quotations/{quotationId} {
-      allow read: if oneOfRoles(['Admin','Management','Sales','Finance','Operations']);
-      allow create, update: if oneOfRoles(['Admin','Management','Sales','Finance']);
+      allow read: if oneOfRoles([
+        'Admin',
+        'Management',
+        'Sales',
+        'Finance',
+        'Operations'
+      ]);
+
+      allow create, update: if oneOfRoles([
+        'Admin',
+        'Management',
+        'Sales',
+        'Finance'
+      ]);
+
       allow delete: if management();
     }
 
     match /orders/{orderId} {
       allow read: if activeUser();
-      allow create: if oneOfRoles(['Admin','Management','Sales']);
-      allow update: if oneOfRoles(['Admin','Management','Operations','Finance']);
+
+      allow create: if oneOfRoles([
+        'Admin',
+        'Management',
+        'Sales'
+      ]);
+
+      // Admin / Management can update the whole order.
+      // Operations can update operational fields only.
+      // Finance can update payment fields only.
+      allow update: if management()
+        || (
+          roleIs('Operations')
+          && orderOperationalFieldsOnly()
+        )
+        || (
+          roleIs('Finance')
+          && orderFinanceFieldsOnly()
+        );
+
       allow delete: if admin();
     }
 
     match /activities/{activityId} {
       allow read: if activeUser();
       allow create: if activeUser();
+
+      // Activity history is append-only.
       allow update, delete: if false;
     }
 
     match /auditLogs/{auditId} {
       allow read: if management();
       allow create: if activeUser();
+
+      // Audit history is append-only.
       allow update, delete: if false;
     }
 
@@ -114,6 +210,7 @@ service cloud.firestore {
       allow write: if admin();
     }
 
+    // Deny everything not explicitly allowed above.
     match /{document=**} {
       allow read, write: if false;
     }
