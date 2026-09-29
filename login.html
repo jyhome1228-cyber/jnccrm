@@ -106,7 +106,9 @@
           if (code.includes('invalid-credential') || code.includes('invalid-login-credentials')) {
             error.textContent = 'Email or password is incorrect.';
           } else if (code === 'crm/profile-missing') {
-            error.textContent = 'Firebase login succeeded, but the CRM user profile is missing in Firestore.';
+            error.textContent = 'Firebase login succeeded, but the CRM user profile is missing. Check the users/{UID} document.';
+          } else if (code.includes('permission-denied')) {
+            error.textContent = 'Firebase login succeeded, but Firestore denied access to the CRM profile. Check the published Firestore Rules and users/{UID} document.';
           } else {
             error.textContent = err.message || 'Unable to sign in.';
           }
