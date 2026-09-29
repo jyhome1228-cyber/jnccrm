@@ -182,3 +182,33 @@ The next implementation milestone is the shared backend:
 - cloud file storage
 - real role permissions
 - website enquiry integration
+
+
+## Pre-Firebase preparation completed
+
+The CRM is now prepared for the backend connection stage.
+
+Completed before Firebase:
+- swappable data-provider architecture
+- schema versioning and local data migration
+- role / permission matrix
+- frontend permission guards
+- confidential Formula visibility restricted to Management / R&D / Admin
+- user management preparation
+- active / inactive user state
+- audit log structure
+- linked-record delete protection
+- JSON backup export
+- JSON backup import
+- Firebase configuration template
+- Firestore Security Rules draft
+- role-aware Storage Rules draft
+- Firestore indexes
+- Firebase deployment config
+- documented Firestore data model
+- Firebase connection checklist
+- GitHub Actions source validation
+
+Validation workflow currently checks JavaScript syntax, JSON configuration and required project files on every push.
+
+At this point, the remaining backend work starts when the Firebase project configuration is provided.
