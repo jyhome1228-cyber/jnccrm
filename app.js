@@ -1,5 +1,12 @@
 (async () => {
-  await CRMData.ready();
+  try {
+    await CRMData.ready();
+  } catch (error) {
+    console.error('CRM bootstrap failed:', error);
+    const code = error && error.code ? encodeURIComponent(error.code) : 'bootstrap';
+    location.replace('./login.html?error=' + code);
+    return;
+  }
   const session = CRMData.getSession();
   if (!session) {
     location.replace('./login.html');
