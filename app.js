@@ -81,7 +81,7 @@
 
   document.getElementById('notificationButton').addEventListener('click', () => renderNotifications());
 
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     const button = e.target.closest('[data-action]');
     if (!button) return;
     const action = button.dataset.action;
@@ -94,8 +94,9 @@
     }
 
     if (action === 'logout') {
-      CRMData.logout();
+      await CRMData.logout();
       location.replace('./login.html');
+      return;
     }
     if (action === 'new-customer') openCustomerForm();
     if (action === 'edit-customer') openCustomerForm(id);
