@@ -60,7 +60,7 @@
 
         <button class="primary-button full" type="submit">Sign in</button>
         <p class="form-error hidden" id="loginError"></p>
-        <p class="login-note">Prototype sign-in uses registered CRM users only. Password validation will switch to Firebase Authentication.</p>
+        <p class="login-note">Secure sign-in is connected to Firebase Authentication. Staff accounts are created by the Master account.</p>
       </form>
     </section>
   </main>
@@ -70,34 +70,71 @@
   <script src="./firebase-adapter.js"></script>
   <script src="./data-provider.js"></script>
   <script>
-    const existing = CRMData.getSession();
-    if (existing) location.replace('./index.html');
+    (async () => {
+      const error = document.getElementById('loginError');
+      const form = document.getElementById('loginForm');
+      const submit = form.querySelector('button[type="submit"]');
 
-    const form = document.getElementById('loginForm');
-    const error = document.getElementById('loginError');
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPassword').value;
-      if (!email || password.length < 4) {
-        error.textContent = 'Please enter a valid email and password.';
-        error.classList.remove('hidden');
-        return;
-      }
       try {
-        CRMData.setSession(email);
-        location.replace('./index.html#dashboard');
-      } catch (err) {
-        error.textContent = err.message || 'Unable to sign in.';
-        error.classList.remove('hidden');
+        await CRMData.ready();
+        if (CRMData.getSession()) {
+          location.replace('./index.html#dashboard');
+          return;
+        }
+      } catch (e) {
+        console.warn(e);
       }
-    });
 
-    document.getElementById('forgotLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      error.textContent = 'Password reset will be connected with the production authentication service.';
-      error.classList.remove('hidden');
-    });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        error.classList.add('hidden');
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!email || password.length < 4) {
+          error.textContent = 'Please enter a valid email and password.';
+          error.classList.remove('hidden');
+          return;
+        }
+
+        submit.disabled = true;
+        submit.textContent = 'Signing in...';
+        try {
+          await CRMData.signIn(email, password);
+          location.replace('./index.html#dashboard');
+        } catch (err) {
+          const code = err && err.code ? err.code : '';
+          if (code.includes('invalid-credential') || code.includes('invalid-login-credentials')) {
+            error.textContent = 'Email or password is incorrect.';
+          } else if (code === 'crm/profile-missing') {
+            error.textContent = 'Firebase login succeeded, but the CRM user profile is missing in Firestore.';
+          } else {
+            error.textContent = err.message || 'Unable to sign in.';
+          }
+          error.classList.remove('hidden');
+        } finally {
+          submit.disabled = false;
+          submit.textContent = 'Sign in';
+        }
+      });
+
+      document.getElementById('forgotLink').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value.trim();
+        if (!email) {
+          error.textContent = 'Enter your email first, then select Forgot password.';
+          error.classList.remove('hidden');
+          return;
+        }
+        try {
+          await CRMData.sendPasswordReset(email);
+          error.textContent = 'Password reset email sent.';
+          error.classList.remove('hidden');
+        } catch (err) {
+          error.textContent = err.message || 'Unable to send reset email.';
+          error.classList.remove('hidden');
+        }
+      });
+    })();
   </script>
 </body>
 </html>
