@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Phase 1 path convention:
+    // customers/{customerId}/...
+    // projects/{projectId}/brief/...
+    // projects/{projectId}/artwork/...
+    // projects/{projectId}/formula/...  (restricted further in production)
+    // samples/{sampleId}/...
+    // orders/{orderId}/...
+    //
+    // Firestore role lookup cannot be performed directly in Storage Rules.
+    // Use Firebase Auth custom claims for role enforcement before production.
+
+    match /{allPaths=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}
