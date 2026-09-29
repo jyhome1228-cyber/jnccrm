@@ -388,3 +388,76 @@ tbody tr:hover{background:#fafcff}
   .role-brief-list>div{align-items:flex-start;flex-direction:column;gap:3px}
   .role-brief-list span{text-align:left}
 }
+
+
+/* JN COS TECH brand theme */
+:root{
+  --navy:#2A1A12;
+  --navy-2:#3A261D;
+  --ink:#2A1A12;
+  --muted:#7D6E66;
+  --line:#E8E0DA;
+  --bg:#F7F4F1;
+  --panel:#FFFFFF;
+  --blue:#7A5847;
+  --green:#6D876D;
+  --teal:#8E6652;
+  --orange:#B87955;
+  --red:#C45D5D;
+  --violet:#866B77;
+  --sky:#A57A64;
+  --shadow:0 8px 24px rgba(42,26,18,.06);
+}
+body{background:var(--bg);color:var(--ink)}
+.sidebar{background:linear-gradient(180deg,#2A1A12,#1D110C);color:#fff}
+.brand,.login-brand{display:block}
+.brand{padding:2px 10px 24px}
+.brand-logo{display:block;width:164px;height:auto}
+.login-brand{padding:0}
+.login-brand-logo{width:220px}
+.brand-logo-on-dark{filter:brightness(0) invert(1);opacity:.98}
+.brand-product{display:inline-block;margin-top:8px;color:#E8DED7;font-size:10px;font-weight:700;letter-spacing:.18em}
+.nav-item{color:#D8CEC8}
+.nav-item:hover,.nav-item.active{color:#fff;background:#4A3024}
+.mini-card{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.07)}
+.mini-card span,.mini-card small{color:#C8BDB6}
+.topbar{background:#fff;border-color:var(--line)}
+.search{background:#FBF8F6;border-color:var(--line)}
+.search svg{color:#7A665B}
+.search kbd{color:#8A776D;border-color:#DED5CF}
+.icon-button{color:var(--ink)}
+.icon-button:hover{background:#F4EFEC}
+.avatar{background:#6B4A3B;color:#fff}
+.eyebrow{color:#8A6C5C}
+.primary-button{background:#2A1A12;color:#fff}
+.primary-button:hover{background:#4A3024}
+.secondary-button{border-color:var(--line);color:#2A1A12}
+.secondary-button:hover{background:#F8F4F1}
+.panel,.stat-card,.detail-item,.operation-card,.staff-summary-grid>div,.summary-strip>div,.pipeline-strip>div{border-color:var(--line)}
+.panel-head svg{color:#8A5F49}
+.panel-head button,.table-link,.back-link{color:#7A4F3B}
+.status-track{background:#EEE7E2}
+.status-track i{background:#7A5847}
+.staff-avatar{background:#F0E8E3;color:#6B4736}
+.project-tabs{background:#EFE8E3;border-color:var(--line)}
+.project-tab-button{color:#7D6E66}
+.project-tab-button:hover{color:#2A1A12}
+.project-tab-button.active{color:#2A1A12}
+.calendar-type{color:#704B39;background:#F1E8E2}
+.tag-list span,.attention-type{background:#F1E9E4;color:#6A4A3A}
+.notification-row>svg,.settings-details summary svg,.document-row svg{color:#8A5F49}
+.login-brand-panel{background:linear-gradient(145deg,#2A1A12,#422A1E);color:#fff}
+.eyebrow.light{color:#D8C9C1}
+.login-message p:last-child{color:#E3D8D2}
+.login-brand-panel>small{color:#C7B8B0}
+.login-form-panel{background:#F7F4F1}
+.login-card{border-color:var(--line)}
+.login-card>label{color:#4A382F}
+.login-card input[type=email],.login-card input[type=password]{border-color:var(--line);color:#2A1A12}
+.login-card input:focus,.field input:focus,.field select:focus,.field textarea:focus{border-color:#9B7764;box-shadow:0 0 0 3px rgba(122,88,71,.12)}
+.login-row a{color:#7A4F3B}
+.master-login-note{border-color:#E3D9D3;background:#FAF6F3}
+.master-login-note strong{color:#4A3429}
+.master-login-note span{color:#806F66}
+.toast{background:#2A1A12;color:#fff}
+.modal-backdrop{background:rgba(42,26,18,.48)}
