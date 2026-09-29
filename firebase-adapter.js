@@ -63,7 +63,7 @@
     for(const c of allowedCollections()){
       try{
         const snap=await modules.getDocs(modules.collection(db,c));
-        state[c]=snap.docs.map(d=>({id:d.id,...d.data()}));
+        state[c]=snap.docs.map(d => c === 'users' ? ({...d.data(),id:d.id,uid:d.id}) : ({id:d.id,...d.data()}));
       }catch(e){ console.warn('Load skipped',c,e.code||e.message); }
     }
     if(session.role==='Admin'||session.role==='Management'){
