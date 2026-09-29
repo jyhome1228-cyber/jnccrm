@@ -1,5 +1,6 @@
-(() => {
-  const session = CRMStore.getSession();
+(async () => {
+  await CRMData.ready();
+  const session = CRMData.getSession();
   if (!session) {
     location.replace('./login.html');
     return;
@@ -47,7 +48,7 @@
     const collection = button.dataset.collection || '';
 
     if (action === 'logout') {
-      CRMStore.logout();
+      CRMData.logout();
       location.replace('./login.html');
     }
     if (action === 'new-customer') openCustomerForm();
@@ -78,7 +79,7 @@
     if (action === 'project-tab') switchProjectTab(button.dataset.tab || 'overview');
     if (action === 'reset-data') {
       if (confirm('Reset all local CRM demo data?')) {
-        CRMStore.reset();
+        CRMData.reset();
         toast('Demo data reset.');
         renderRoute();
       }
@@ -127,12 +128,12 @@
   }
 
   function getCustomerName(id) {
-    const item = CRMStore.get('customers', id);
+    const item = CRMData.get('customers', id);
     return item ? item.company : '—';
   }
 
   function getProjectName(id) {
-    const item = CRMStore.get('projects', id);
+    const item = CRMData.get('projects', id);
     return item ? item.name : '—';
   }
 
@@ -252,7 +253,7 @@
   }
 
   function updateNotificationCount() {
-    const state = CRMStore.getState();
+    const state = CRMData.getState();
     const today = new Date().toISOString().slice(0,10);
     const dueLeads = state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).length;
     const waitingSamples = state.samples.filter(s => /Waiting|Revision/.test(s.status)).length;
@@ -263,7 +264,7 @@
   }
 
   function renderNotifications() {
-    const state = CRMStore.getState();
+    const state = CRMData.getState();
     const today = new Date().toISOString().slice(0,10);
     const items = [];
     state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).forEach(l => {
@@ -276,7 +277,7 @@
   }
 
   function renderDashboard() {
-    const state = CRMStore.getState();
+    const state = CRMData.getState();
     const today = new Date().toISOString().slice(0,10);
     const newLeads = state.leads.filter(l => l.status === 'New').length;
     const activeProjects = state.projects.filter(p => !/Approved|Cancelled/.test(p.status)).length;
@@ -371,7 +372,7 @@
   }
 
   function renderCustomers() {
-    const customers = CRMStore.list('customers');
+    const customers = CRMData.list('customers');
     const rows = customers.map(c =>
       '<tr><td><a class="table-link" href="#customers/' + esc(c.id) + '">' + esc(c.id) + '</a></td><td><strong>' + esc(c.company) + '</strong></td><td>' + esc(c.country) + '</td><td>' + esc(c.type) + '</td><td>' + esc(c.contact) + '</td><td>' + esc(c.owner) + '</td><td>' + badge(c.status) + '</td><td class="actions-cell"><button class="row-action" data-action="edit-customer" data-id="' + esc(c.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-customer" data-id="' + esc(c.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
     ).join('');
@@ -382,12 +383,12 @@
   }
 
   function renderCustomerDetail(id) {
-    const c = CRMStore.get('customers', id);
+    const c = CRMData.get('customers', id);
     if (!c) { pageRoot.innerHTML = pageHeading('Customer not found','The requested customer record does not exist.',''); return; }
-    const projects = CRMStore.list('projects').filter(p => p.customerId === id);
-    const orders = CRMStore.list('orders').filter(o => o.customerId === id);
+    const projects = CRMData.list('projects').filter(p => p.customerId === id);
+    const orders = CRMData.list('orders').filter(o => o.customerId === id);
     const projectIds = projects.map(p => p.id);
-    const quotes = CRMStore.list('quotations').filter(q => projectIds.includes(q.projectId));
+    const quotes = CRMData.list('quotations').filter(q => projectIds.includes(q.projectId));
 
     pageRoot.innerHTML =
       '<div class="detail-header"><div><a class="back-link" href="#customers"><i data-lucide="arrow-left"></i> Customers</a><p class="eyebrow">CUSTOMER 360°</p><h1>' + esc(c.company) + '</h1><p>' + esc(c.country) + ' · ' + esc(c.type) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-customer" data-id="' + esc(c.id) + '">Edit</button><button class="primary-button" data-action="new-project"><i data-lucide="plus"></i> New Project</button></div></div>' +
@@ -403,7 +404,7 @@
   }
 
   function openCustomerForm(id) {
-    const c = id ? CRMStore.get('customers', id) : {};
+    const c = id ? CRMData.get('customers', id) : {};
     const fields =
       inputField('Company Name','company',c.company,'text',true) +
       inputField('Country','country',c.country,'text',true) +
@@ -416,13 +417,13 @@
       inputField('Payment Terms','paymentTerms',c.paymentTerms,'text',false,true) +
       textAreaField('Internal Notes','notes',c.notes,true);
     modalForm(id ? 'Edit Customer' : 'New Customer','Customer company and account information.',fields,id ? 'Save Changes' : 'Create Customer',data => {
-      id ? CRMStore.update('customers', id, data) : CRMStore.create('customers', data);
+      id ? CRMData.update('customers', id, data) : CRMData.create('customers', data);
       closeModal(); toast(id ? 'Customer updated.' : 'Customer created.'); renderRoute();
     });
   }
 
   function renderLeads() {
-    const leads = CRMStore.list('leads');
+    const leads = CRMData.list('leads');
     const rows = leads.map(l =>
       '<tr><td><strong>' + esc(l.id) + '</strong></td><td>' + esc(l.company) + '<small class="cell-sub">' + esc(l.contact) + '</small></td><td>' + esc(l.type) + '</td><td>' + esc(l.source) + '</td><td>' + esc(l.owner) + '</td><td>' + badge(l.status) + '</td><td>' + esc(l.nextActionDate) + '<small class="cell-sub">' + esc(l.nextAction) + '</small></td><td class="actions-cell"><button class="row-action" title="Create Project" data-action="lead-to-project" data-id="' + esc(l.id) + '"><i data-lucide="folder-plus"></i></button><button class="row-action" data-action="edit-lead" data-id="' + esc(l.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-lead" data-id="' + esc(l.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
     ).join('');
@@ -433,7 +434,7 @@
   }
 
   function openLeadForm(id) {
-    const l = id ? CRMStore.get('leads', id) : {};
+    const l = id ? CRMData.get('leads', id) : {};
     const fields =
       inputField('Company','company',l.company,'text',true) +
       inputField('Contact Person','contact',l.contact,'text',true) +
@@ -448,21 +449,21 @@
       inputField('Next Action','nextAction',l.nextAction,'text',false,true) +
       textAreaField('Enquiry Details','details',l.details,true);
     modalForm(id ? 'Edit Lead' : 'New Lead','Record the enquiry and always assign a next action.',fields,id ? 'Save Changes' : 'Create Lead',data => {
-      id ? CRMStore.update('leads', id, data) : CRMStore.create('leads', data);
+      id ? CRMData.update('leads', id, data) : CRMData.create('leads', data);
       closeModal(); toast(id ? 'Lead updated.' : 'Lead created.'); renderRoute();
     });
   }
 
   function convertLeadToProject(id) {
-    const lead = CRMStore.get('leads', id);
+    const lead = CRMData.get('leads', id);
     if (!lead) return;
-    let customer = CRMStore.list('customers').find(c => c.company.toLowerCase() === lead.company.toLowerCase());
+    let customer = CRMData.list('customers').find(c => c.company.toLowerCase() === lead.company.toLowerCase());
     if (!customer) {
-      customer = CRMStore.create('customers', {
+      customer = CRMData.create('customers', {
         company:lead.company, country:lead.country, type:lead.type, contact:lead.contact, email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active', paymentTerms:'TBD', notes:'Created from ' + lead.id
       });
     }
-    const project = CRMStore.create('projects', {
+    const project = CRMData.create('projects', {
       customerId:customer.id,
       name:lead.company + ' New Product',
       category:'',
@@ -478,13 +479,13 @@
       artworkStatus:'Not Started',
       approvalStatus:'Pending'
     });
-    CRMStore.update('leads', id, {status:'Development'});
+    CRMData.update('leads', id, {status:'Development'});
     toast('Project ' + project.id + ' created from lead.');
     location.hash = '#projects/' + project.id;
   }
 
   function renderProjects() {
-    const projects = CRMStore.list('projects');
+    const projects = CRMData.list('projects');
     const rows = projects.map(p =>
       '<tr class="clickable-row" onclick="location.hash=\'#projects/' + esc(p.id) + '\'"><td><strong>' + esc(p.id) + '</strong></td><td>' + esc(getCustomerName(p.customerId)) + '</td><td><strong>' + esc(p.name) + '</strong><small class="cell-sub">' + esc(p.category) + '</small></td><td>' + esc(p.salesOwner) + '</td><td>' + esc(p.rdOwner || '—') + '</td><td>' + badge(p.status) + '</td><td>' + esc(p.targetDate || '—') + '</td><td class="actions-cell" onclick="event.stopPropagation()"><button class="row-action" data-action="edit-project" data-id="' + esc(p.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-project" data-id="' + esc(p.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
     ).join('');
@@ -495,8 +496,8 @@
   }
 
   function openProjectForm(id, preset) {
-    const p = id ? CRMStore.get('projects', id) : (preset || {});
-    const customers = CRMStore.list('customers');
+    const p = id ? CRMData.get('projects', id) : (preset || {});
+    const customers = CRMData.list('customers');
     const customerOptions = customers.map(c => c.id + ' | ' + c.company);
     const currentCustomerOption = p.customerId ? (p.customerId + ' | ' + getCustomerName(p.customerId)) : (customerOptions[0] || '');
     const fields =
@@ -517,19 +518,19 @@
       if (!id) {
         data.formulaStatus='Not Started'; data.packagingStatus='Not Started'; data.artworkStatus='Not Started'; data.approvalStatus='Pending';
       }
-      const record = id ? CRMStore.update('projects', id, data) : CRMStore.create('projects', data);
+      const record = id ? CRMData.update('projects', id, data) : CRMData.create('projects', data);
       closeModal(); toast(id ? 'Project updated.' : 'Project created.'); location.hash = '#projects/' + record.id;
     });
   }
 
   
 function renderProjectDetail(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) { pageRoot.innerHTML = pageHeading('Project not found','The requested project record does not exist.',''); return; }
-    const samples = CRMStore.list('samples').filter(s => s.projectId === id);
-    const quotes = CRMStore.list('quotations').filter(q => q.projectId === id);
-    const orders = CRMStore.list('orders').filter(o => o.projectId === id);
-    const activities = CRMStore.list('activities').filter(a => String(a.meta || '').includes(id)).slice(0,20);
+    const samples = CRMData.list('samples').filter(s => s.projectId === id);
+    const quotes = CRMData.list('quotations').filter(q => q.projectId === id);
+    const orders = CRMData.list('orders').filter(o => o.projectId === id);
+    const activities = CRMData.list('activities').filter(a => String(a.meta || '').includes(id)).slice(0,20);
 
     const documentRows = String(p.documents || '').split('\n').map(x => x.trim()).filter(Boolean).map(line =>
       '<div class="document-row"><i data-lucide="paperclip"></i><span>' + esc(line) + '</span></div>'
@@ -625,7 +626,7 @@ function renderProjectDetail(id) {
   }
 
   function openProjectBriefForm(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) return;
     const fields =
       textAreaField('Product Brief','brief',p.brief,true) +
@@ -641,12 +642,12 @@ function renderProjectDetail(id) {
       inputField('MOQ','moq',p.moq,'text',false) +
       inputField('Target Price','targetPrice',p.targetPrice,'text',false);
     modalForm('Product Brief','Maintain the structured customer product brief.',fields,'Save Brief',data => {
-      CRMStore.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
+      CRMData.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
     });
   }
 
   function openProjectFormulaForm(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) return;
     const fields =
       inputField('Formula Version','formulaVersion',p.formulaVersion || 'V1','text',true) +
@@ -655,12 +656,12 @@ function renderProjectDetail(id) {
       inputField('Approval Date','formulaApprovalDate',p.formulaApprovalDate,'date',false) +
       textAreaField('Formula Notes','formulaComments',p.formulaComments,true);
     modalForm('Formula Control','Track formula version, status and approval record.',fields,'Save Formula',data => {
-      CRMStore.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
+      CRMData.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
     });
   }
 
   function openProjectPackagingForm(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) return;
     const fields =
       inputField('Packaging Type','packagingType',p.packagingType,'text',false) +
@@ -672,12 +673,12 @@ function renderProjectDetail(id) {
       selectField('Sample / Procurement Status','packagingStatus',p.packagingStatus || 'Not Started',['Not Started','Searching','Sample Requested','Sample Received','Compatibility Check','Sample Approved','Approved','Rejected'],true) +
       selectField('Compatibility Status','compatibilityStatus',p.compatibilityStatus || 'Not Tested',['Not Tested','Testing','Passed','Failed','Hold'],true);
     modalForm('Packaging Specification','Track the primary pack and compatibility status.',fields,'Save Packaging',data => {
-      CRMStore.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
+      CRMData.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
     });
   }
 
   function openProjectArtworkForm(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) return;
     const fields =
       inputField('Artwork Version','artworkVersion',p.artworkVersion || 'V1','text',true) +
@@ -686,12 +687,12 @@ function renderProjectDetail(id) {
       inputField('Approval Date','artworkApprovalDate',p.artworkApprovalDate,'date',false) +
       textAreaField('Artwork Notes','artworkNotes',p.artworkNotes,true);
     modalForm('Artwork Control','Keep artwork versions and the final approved state visible.',fields,'Save Artwork',data => {
-      CRMStore.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
+      CRMData.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
     });
   }
 
   function openProjectApprovalForm(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) return;
     const fields =
       selectField('Approval Type','approvalType',p.approvalType || 'Project Approval',['Formula Approval','Sample Approval','Artwork Approval','Commercial Approval','Project Approval'],true) +
@@ -700,21 +701,21 @@ function renderProjectDetail(id) {
       inputField('Approval Date','approvalDate',p.approvalDate,'date',false) +
       textAreaField('Approval Comment','approvalComment',p.approvalComment,true);
     modalForm('Approval Record','Record who approved or rejected the current project gate.',fields,'Save Approval',data => {
-      CRMStore.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
+      CRMData.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
     });
   }
 
   function openProjectDocumentsForm(id) {
-    const p = CRMStore.get('projects', id);
+    const p = CRMData.get('projects', id);
     if (!p) return;
     const fields = textAreaField('Document References','documents',p.documents,true);
     modalForm('Project Documents','Add one file name, Drive link or document reference per line.',fields,'Save Documents',data => {
-      CRMStore.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
+      CRMData.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
     });
   }
 
   function renderSamples() {
-    const samples = CRMStore.list('samples');
+    const samples = CRMData.list('samples');
     const rows = samples.map(s =>
       '<tr><td><strong>' + esc(s.id) + '</strong></td><td>' + esc(s.projectId) + '<small class="cell-sub">' + esc(getProjectName(s.projectId)) + '</small></td><td>' + esc(s.version) + '</td><td>' + esc(s.rdOwner) + '</td><td>' + esc(s.createdDate) + '</td><td>' + badge(s.status) + '</td><td>' + esc(s.dispatchDate || '—') + '<small class="cell-sub">' + esc(s.tracking || '') + '</small></td><td>' + esc(s.feedbackDate || '—') + '</td><td class="actions-cell"><button class="row-action" data-action="edit-sample" data-id="' + esc(s.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-record" data-collection="samples" data-id="' + esc(s.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
     ).join('');
@@ -723,8 +724,8 @@ function renderProjectDetail(id) {
   }
 
   function openSampleForm(projectId, sampleId) {
-    const s = sampleId ? CRMStore.get('samples', sampleId) : {};
-    const projects = CRMStore.list('projects');
+    const s = sampleId ? CRMData.get('samples', sampleId) : {};
+    const projects = CRMData.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
     const selected = s.projectId ? s.projectId + ' | ' + getProjectName(s.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
     const fields =
@@ -747,15 +748,15 @@ function renderProjectDetail(id) {
         const versionNum = String(data.version || 'V1').replace(/\D/g,'') || '1';
         data.id = 'SMP-' + pid.replace(/\D/g,'').padStart(3,'0') + '-V' + versionNum;
       }
-      sampleId ? CRMStore.update('samples', sampleId, data) : CRMStore.create('samples', data);
+      sampleId ? CRMData.update('samples', sampleId, data) : CRMData.create('samples', data);
       closeModal(); toast(sampleId ? 'Sample updated.' : 'Sample created.'); renderRoute();
     });
   }
 
   
 function renderQuotations() {
-    const quotes = CRMStore.list('quotations');
-    const orders = CRMStore.list('orders');
+    const quotes = CRMData.list('quotations');
+    const orders = CRMData.list('orders');
     const rows = quotes.map(q => {
       const converted = orders.some(o => o.quoteId === q.id);
       const convertButton = q.status === 'Accepted' && !converted
@@ -768,8 +769,8 @@ function renderQuotations() {
   }
 
   function openQuotationForm(projectId, quotationId) {
-    const q = quotationId ? CRMStore.get('quotations', quotationId) : {};
-    const projects = CRMStore.list('projects');
+    const q = quotationId ? CRMData.get('quotations', quotationId) : {};
+    const projects = CRMData.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
     const selected = q.projectId ? q.projectId + ' | ' + getProjectName(q.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
     const fields =
@@ -785,25 +786,25 @@ function renderQuotations() {
       textAreaField('Notes','notes',q.notes,true);
     modalForm(quotationId ? 'Edit Quotation' : 'New Quotation','Accepted quotations can be converted directly into orders.',fields,quotationId ? 'Save Changes' : 'Create Quotation',data => {
       data.projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      quotationId ? CRMStore.update('quotations', quotationId, data) : CRMStore.create('quotations', data);
+      quotationId ? CRMData.update('quotations', quotationId, data) : CRMData.create('quotations', data);
       closeModal(); toast(quotationId ? 'Quotation updated.' : 'Quotation created.'); renderRoute();
     });
   }
 
   function convertQuotationToOrder(id) {
-    const q = CRMStore.get('quotations', id);
+    const q = CRMData.get('quotations', id);
     if (!q) return;
     if (q.status !== 'Accepted') {
       toast('Only accepted quotations can be converted.');
       return;
     }
-    if (CRMStore.list('orders').some(o => o.quoteId === id)) {
+    if (CRMData.list('orders').some(o => o.quoteId === id)) {
       toast('An order already exists for this quotation.');
       return;
     }
-    const project = CRMStore.get('projects', q.projectId);
+    const project = CRMData.get('projects', q.projectId);
     if (!project) return;
-    const order = CRMStore.create('orders', {
+    const order = CRMData.create('orders', {
       quoteId:q.id,
       customerId:project.customerId,
       projectId:project.id,
@@ -827,7 +828,7 @@ function renderQuotations() {
 
   
 function renderOrders() {
-    const orders = CRMStore.list('orders');
+    const orders = CRMData.list('orders');
     const rows = orders.map(o =>
       '<tr><td><strong>' + esc(o.id) + '</strong><small class="cell-sub">' + esc(o.po || 'No PO') + (o.quoteId ? ' · ' + esc(o.quoteId) : '') + '</small></td><td>' + esc(getCustomerName(o.customerId)) + '</td><td>' + esc(getProjectName(o.projectId)) + '</td><td>' + esc(o.quantity) + '</td><td>' + esc(o.committedDate || '—') + '</td><td>' + badge(o.readiness) + '</td><td>' + badge(o.productionStatus) + '</td><td>' + badge(o.qcStatus) + '</td><td>' + badge(o.dispatchStatus) + '</td><td>' + badge(o.paymentStatus) + '</td><td class="actions-cell"><button class="row-action" data-action="edit-order" data-id="' + esc(o.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-record" data-collection="orders" data-id="' + esc(o.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
     ).join('');
@@ -836,8 +837,8 @@ function renderOrders() {
   }
 
   function openOrderForm(projectId, orderId, returnView) {
-    const o = orderId ? CRMStore.get('orders', orderId) : {};
-    const projects = CRMStore.list('projects');
+    const o = orderId ? CRMData.get('orders', orderId) : {};
+    const projects = CRMData.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
     const selected = o.projectId ? o.projectId + ' | ' + getProjectName(o.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
     const fields =
@@ -859,10 +860,10 @@ function renderOrders() {
       textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
     modalForm(orderId ? 'Update Order' : 'New Order','Use one record to manage commercial and operational status.',fields,orderId ? 'Save Changes' : 'Create Order',data => {
       const pid = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      const project = CRMStore.get('projects', pid);
+      const project = CRMData.get('projects', pid);
       data.projectId = pid; data.customerId = project ? project.customerId : '';
-      if (orderId) CRMStore.update('orders', orderId, data);
-      else CRMStore.create('orders', data);
+      if (orderId) CRMData.update('orders', orderId, data);
+      else CRMData.create('orders', data);
       closeModal(); toast(orderId ? 'Order updated.' : 'Order created.');
       if (returnView === 'operations') location.hash = '#operations';
       else renderRoute();
@@ -871,7 +872,7 @@ function renderOrders() {
 
   
 function renderOperations() {
-    const orders = CRMStore.list('orders');
+    const orders = CRMData.list('orders');
     const cards = orders.map(o =>
       '<article class="operation-card"><div class="operation-head"><div><span>' + esc(o.id) + '</span><h3>' + esc(getProjectName(o.projectId)) + '</h3><p>' + esc(getCustomerName(o.customerId)) + '</p></div>' + badge(o.productionStatus) + '</div>' +
       '<div class="operation-steps"><div class="' + (/Materials|Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.qcStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Dispatched|In Transit|Delivered/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div>' +
@@ -884,7 +885,7 @@ function renderOperations() {
   }
 
   function renderCalendar() {
-    const state = CRMStore.getState();
+    const state = CRMData.getState();
     const events = [];
     state.leads.filter(l=>l.nextActionDate).forEach(l=>events.push({date:l.nextActionDate,type:'Follow-up',title:l.company + ' · ' + l.nextAction,link:'#leads'}));
     state.projects.filter(p=>p.targetDate).forEach(p=>events.push({date:p.targetDate,type:'Project Target',title:p.id + ' · ' + p.name,link:'#projects/' + p.id}));
@@ -907,7 +908,7 @@ function renderOperations() {
   }
 
   function renderSettings() {
-    const state = CRMStore.getState();
+    const state = CRMData.getState();
     const userRows = state.users.map(u =>
       '<tr><td><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></td><td>' + esc(u.department) + '</td><td>' + badge(u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td></tr>'
     ).join('');
@@ -922,7 +923,7 @@ function renderOperations() {
   }
 
   function renderSearch(query) {
-    const results = CRMStore.search(query);
+    const results = CRMData.search(query);
     pageRoot.innerHTML = pageHeading('Search','Results for "' + query + '".','') +
       '<section class="panel search-results">' +
       (results.map(item => {
@@ -939,7 +940,7 @@ function renderOperations() {
 
   function deleteRecord(collection, id, label) {
     if (!confirm('Delete this ' + label + '?')) return;
-    CRMStore.remove(collection, id);
+    CRMData.remove(collection, id);
     toast(label.charAt(0).toUpperCase() + label.slice(1) + ' deleted.');
     renderRoute();
   }
