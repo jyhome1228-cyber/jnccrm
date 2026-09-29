@@ -1,5 +1,7 @@
 (() => {
   function resolveAdapter() {
+    const demoMode = sessionStorage.getItem('jnc-demo-mode') === '1';
+    if (demoMode && window.CRMStore) return window.CRMStore;
     const mode = (window.CRM_CONFIG && window.CRM_CONFIG.dataProvider) || 'local';
     if (mode === 'firebase' && window.FirebaseCRMAdapter) return window.FirebaseCRMAdapter;
     if (window.CRMStore) return window.CRMStore;
@@ -29,6 +31,6 @@
   window.CRMData = Object.assign({}, adapter, {
     ready,
     can,
-    providerName: ((window.CRM_CONFIG && window.CRM_CONFIG.dataProvider) || 'local')
+    providerName: (sessionStorage.getItem('jnc-demo-mode') === '1' ? 'demo' : ((window.CRM_CONFIG && window.CRM_CONFIG.dataProvider) || 'local'))
   });
 })();
