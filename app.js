@@ -425,9 +425,12 @@ function getDashboardScope() {
     const dashboardCopy = isMaster || isManagement
       ? 'See the overall business status and what needs attention today.'
       : 'See your assigned work, upcoming schedule and items requiring action.';
-    const action = isMaster
-      ? '<button class="primary-button" onclick="location.hash=\'#settings\'"><i data-lucide="users"></i> Staff Management</button>'
-      : '<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>';
+    let action = '';
+    if (isMaster) action = '<button class="primary-button" onclick="location.hash=\'#settings\'"><i data-lucide="users"></i> Staff Management</button>';
+    else if (session.role === 'Sales' || isManagement) action = '<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>';
+    else if (session.role === 'R&D') action = '<button class="primary-button" onclick="location.hash=\'#samples\'"><i data-lucide="flask-conical"></i> Samples</button>';
+    else if (session.role === 'Operations') action = '<button class="primary-button" onclick="location.hash=\'#operations\'"><i data-lucide="blocks"></i> Operations</button>';
+    else if (session.role === 'Finance') action = '<button class="primary-button" onclick="location.hash=\'#orders\'"><i data-lucide="credit-card"></i> Orders</button>';
 
     pageRoot.innerHTML =
       pageHeading(dashboardTitle,dashboardCopy,action) +
