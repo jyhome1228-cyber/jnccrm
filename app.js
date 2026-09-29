@@ -24,6 +24,7 @@
   const toastEl = document.getElementById('toast');
   let charts = [];
   let calendarCursor = new Date();
+  let calendarEventCache = [];
 
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
@@ -144,6 +145,12 @@
     if (action === 'new-calendar-event') openCalendarEventForm('', button.dataset.date || '');
     if (action === 'edit-calendar-event') openCalendarEventForm(id);
     if (action === 'delete-calendar-event') deleteCalendarEvent(id);
+    if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
+    if (action === 'calendar-open-related') {
+      const target = button.dataset.target || '#calendar';
+      closeModal();
+      location.hash = target.replace(/^#/, '');
+    }
     if (action === 'new-user') openUserForm();
     if (action === 'edit-user') openUserForm(id);
     if (action === 'toggle-user') toggleUser(id);
@@ -1044,34 +1051,47 @@ function renderOperations() {
 
     state.leads.filter(l=>l.nextActionDate).forEach(l=>events.push({
       id:'lead-'+l.id, date:l.nextActionDate, type:'Follow-up',
-      title:l.company + ' · ' + (l.nextAction || 'Follow-up'), link:'#leads', system:true
+      title:l.company + ' · ' + (l.nextAction || 'Follow-up'), link:'#leads', system:true,
+      recordId:l.id, related:l.company,
+      description:'Customer follow-up is due. Review the enquiry history, next action and contact status before proceeding.'
     }));
     state.projects.filter(p=>p.targetDate).forEach(p=>events.push({
       id:'project-'+p.id, date:p.targetDate, type:'Project',
-      title:p.id + ' · ' + p.name, link:'#projects/' + p.id, system:true
+      title:p.id + ' · ' + p.name, link:'#projects/' + p.id, system:true,
+      recordId:p.id, related:getCustomerName(p.customerId),
+      description:'Project target date. Review the current development stage, pending approvals, samples and responsible owners.'
     }));
     state.samples.filter(s=>s.feedbackDate).forEach(s=>events.push({
       id:'sample-'+s.id, date:s.feedbackDate, type:'Sample',
-      title:s.id + ' · ' + getProjectName(s.projectId), link:'#samples', system:true
+      title:s.id + ' · ' + getProjectName(s.projectId), link:'#samples', system:true,
+      recordId:s.id, related:getProjectName(s.projectId),
+      description:'Sample feedback is expected. Check the dispatched version, customer comments and whether a revision is required.'
     }));
     state.quotations.filter(q=>q.validUntil).forEach(q=>events.push({
       id:'quote-'+q.id, date:q.validUntil, type:'Quotation',
-      title:q.id + ' · ' + getProjectName(q.projectId), link:'#quotations', system:true
+      title:q.id + ' · ' + getProjectName(q.projectId), link:'#quotations', system:true,
+      recordId:q.id, related:getProjectName(q.projectId),
+      description:'Quotation validity or follow-up date. Review the commercial response, revision status and next sales action.'
     }));
     state.orders.filter(o=>o.committedDate).forEach(o=>events.push({
       id:'dispatch-'+o.id, date:o.committedDate, type:'Dispatch',
-      title:o.id + ' · ' + getCustomerName(o.customerId), link:'#orders', system:true
+      title:o.id + ' · ' + getCustomerName(o.customerId), link:'#orders', system:true,
+      recordId:o.id, related:getProjectName(o.projectId),
+      description:'Committed order / dispatch date. Check production readiness, QC release and shipping status.'
     }));
     state.orders.filter(o=>o.paymentDue).forEach(o=>events.push({
       id:'payment-'+o.id, date:o.paymentDue, type:'Payment',
-      title:o.id + ' · ' + getCustomerName(o.customerId), link:'#orders', system:true
+      title:o.id + ' · ' + getCustomerName(o.customerId), link:'#orders', system:true,
+      recordId:o.id, related:getProjectName(o.projectId),
+      description:'Payment due date. Review the invoice, received amount, outstanding balance and follow-up status.'
     }));
 
     (state.calendarEvents || []).forEach(e=>events.push({
       ...e, type:e.type || 'Schedule', system:false
     }));
 
-    return events.filter(e=>e.date).sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+    calendarEventCache = events.filter(e=>e.date).sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+    return calendarEventCache;
   }
 
   function renderCalendar() {
@@ -1109,7 +1129,7 @@ function renderOperations() {
       const eventHtml = visible.map(e => {
         const label = (e.time ? e.time + ' ' : '') + e.title;
         if (e.system) {
-          return '<a class="calendar-event calendar-event-system calendar-event-' + esc(String(e.type).toLowerCase()) + '" href="' + esc(e.link || '#calendar') + '" title="' + esc(label) + '"><span>' + esc(e.type) + '</span><strong>' + esc(label) + '</strong></a>';
+          return '<button class="calendar-event calendar-event-system calendar-event-' + esc(String(e.type).toLowerCase()) + '" data-action="calendar-linked-event" data-id="' + esc(e.id) + '" title="' + esc(label) + '"><span>' + esc(e.type) + '</span><strong>' + esc(label) + '</strong></button>';
         }
         return '<button class="calendar-event calendar-event-manual calendar-event-' + esc(String(e.type).toLowerCase()) + '" data-action="edit-calendar-event" data-id="' + esc(e.id) + '" title="' + esc(label) + '"><span>' + esc(e.type) + '</span><strong>' + esc(label) + '</strong></button>';
       }).join('');
@@ -1147,6 +1167,33 @@ function renderOperations() {
       '<div class="calendar-legend"><span><i class="legend-dot manual"></i> Manual schedule</span><span><i class="legend-dot system"></i> CRM linked schedule</span></div>';
 
     lucide.createIcons();
+  }
+
+  function showCalendarLinkedEvent(id) {
+    const event = calendarEventCache.find(e => e.id === id && e.system);
+    if (!event) {
+      toast('This linked schedule is no longer available.');
+      return;
+    }
+
+    const html =
+      '<div class="calendar-detail-modal">' +
+        '<div class="calendar-detail-top"><span class="calendar-detail-type">' + esc(event.type) + '</span><span class="calendar-detail-date">' + esc(event.date) + (event.time ? ' · ' + esc(event.time) : '') + '</span></div>' +
+        '<h2>' + esc(event.title) + '</h2>' +
+        '<p class="calendar-detail-description">' + esc(event.description || 'Review the related CRM record for this schedule.') + '</p>' +
+        '<div class="detail-grid compact calendar-detail-grid">' +
+          detailItem('Related', event.related || '—') +
+          detailItem('Record ID', event.recordId || '—') +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<button type="button" class="secondary-button" id="calendarDetailClose">Close</button>' +
+          '<button type="button" class="primary-button" data-action="calendar-open-related" data-target="' + esc(event.link || '#calendar') + '"><i data-lucide="arrow-up-right"></i> Open Related Record</button>' +
+        '</div>' +
+      '</div>';
+
+    openModal(html);
+    const close = document.getElementById('calendarDetailClose');
+    if (close) close.addEventListener('click', closeModal);
   }
 
   function openCalendarEventForm(id, presetDate) {
