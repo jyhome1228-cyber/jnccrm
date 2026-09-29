@@ -1,9 +1,9 @@
 (() => {
   const cfg = window.CRM_CONFIG.firebase;
-  const collections = ['customers','leads','projects','samples','quotations','orders','activities','auditLogs','users'];
+  const collections = ['customers','leads','projects','formulas','samples','quotations','orders','activities','auditLogs','users'];
   const state = {
     schemaVersion: window.CRM_CONFIG.schemaVersion || 2,
-    customers:[], leads:[], projects:[], samples:[], quotations:[], orders:[],
+    customers:[], leads:[], projects:[], formulas:[], samples:[], quotations:[], orders:[],
     activities:[], auditLogs:[], users:[],
     settings:{ companyName:'JN COS TECH', defaultCurrency:'INR', dateFormat:'YYYY-MM-DD' }
   };
@@ -51,7 +51,7 @@
     const role=session?.role||'Staff';
     if(role==='Admin'||role==='Management') return collections;
     if(role==='Sales') return ['customers','leads','projects','samples','quotations','orders','activities'];
-    if(role==='R&D') return ['customers','leads','projects','samples','quotations','orders','activities'];
+    if(role==='R&D') return ['customers','leads','projects','formulas','samples','quotations','orders','activities'];
     if(role==='Operations') return ['customers','projects','samples','quotations','orders','activities'];
     if(role==='Finance') return ['customers','projects','quotations','orders','activities'];
     return ['customers','projects','samples','activities'];
@@ -66,6 +66,21 @@
         state[c]=snap.docs.map(d => c === 'users' ? ({...d.data(),id:d.id,uid:d.id}) : ({id:d.id,...d.data()}));
       }catch(e){ console.warn('Load skipped',c,e.code||e.message); }
     }
+    if (state.formulas.length) {
+      const byProject = Object.fromEntries(state.formulas.map(f => [f.projectId || f.id, f]));
+      state.projects = state.projects.map(p => {
+        const f = byProject[p.id];
+        return f ? {
+          ...p,
+          formulaVersion:f.version || '',
+          formulaStatus:f.status || '',
+          formulaOwner:f.rdOwner || '',
+          formulaApprovalDate:f.approvalDate || '',
+          formulaComments:f.comments || ''
+        } : p;
+      });
+    }
+
     if(session.role==='Admin'||session.role==='Management'){
       try{
         const s=await modules.getDoc(modules.doc(db,'settings','system'));
@@ -131,6 +146,36 @@
 
   function create(c,data){
     const rec={...data}; if(!rec.id) rec.id=nextId(c); rec.updatedAt=now(); if(['customers','leads','users'].includes(c)&&!rec.createdAt) rec.createdAt=now();
+
+    if (c === 'projects') {
+      const formula = {
+        projectId:rec.id,
+        version:rec.formulaVersion || '',
+        status:rec.formulaStatus || '',
+        rdOwner:rec.formulaOwner || rec.rdOwner || '',
+        approvalDate:rec.formulaApprovalDate || '',
+        comments:rec.formulaComments || '',
+        updatedAt:now()
+      };
+      ['formulaVersion','formulaStatus','formulaOwner','formulaApprovalDate','formulaComments'].forEach(k => delete rec[k]);
+      state[c].unshift({...rec,...{
+        formulaVersion:formula.version,
+        formulaStatus:formula.status,
+        formulaOwner:formula.rdOwner,
+        formulaApprovalDate:formula.approvalDate,
+        formulaComments:formula.comments
+      }});
+      emit();
+      modules.setDoc(modules.doc(db,c,rec.id),rec)
+        .then(async()=> {
+          if (session && ['Admin','Management','R&D'].includes(session.role)) {
+            await modules.setDoc(modules.doc(db,'formulas',rec.id),formula,{merge:true});
+          }
+          audit('create',c,rec.id,null,rec); activity('project created',rec.id);
+        }).catch(console.error);
+      return clone(state[c][0]);
+    }
+
     state[c].unshift(rec); emit();
     modules.setDoc(modules.doc(db,c,rec.id),rec).then(()=>{audit('create',c,rec.id,null,rec);activity(c.slice(0,-1)+' created',rec.id)}).catch(e=>console.error(e));
     return clone(rec);
@@ -138,6 +183,46 @@
 
   function update(c,id,data){
     const i=(state[c]||[]).findIndex(x=>x.id===id); if(i<0) return null;
+
+    if (c === 'projects') {
+      const formulaKeys = ['formulaVersion','formulaStatus','formulaOwner','formulaApprovalDate','formulaComments'];
+      const formulaPatch = {};
+      const projectPatch = {...data};
+      formulaKeys.forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(projectPatch,key)) {
+          formulaPatch[key] = projectPatch[key];
+          delete projectPatch[key];
+        }
+      });
+
+      if (Object.keys(formulaPatch).length) {
+        const f = {
+          projectId:id,
+          version:formulaPatch.formulaVersion || '',
+          status:formulaPatch.formulaStatus || '',
+          rdOwner:formulaPatch.formulaOwner || '',
+          approvalDate:formulaPatch.formulaApprovalDate || '',
+          comments:formulaPatch.formulaComments || '',
+          updatedAt:now()
+        };
+        modules.setDoc(modules.doc(db,'formulas',id),f,{merge:true})
+          .then(()=>audit('update','formulas',id,null,f))
+          .catch(console.error);
+      }
+
+      const before=clone(state[c][i]);
+      const rec={...state[c][i],...data,updatedAt:now()};
+      state[c][i]=rec; emit();
+
+      if (Object.keys(projectPatch).length) {
+        const projectDoc={...projectPatch,updatedAt:rec.updatedAt};
+        modules.setDoc(modules.doc(db,c,id),projectDoc,{merge:true})
+          .then(()=>{audit('update',c,id,before,rec);activity('project updated',id)})
+          .catch(console.error);
+      }
+      return clone(rec);
+    }
+
     const before=clone(state[c][i]); const rec={...state[c][i],...data,updatedAt:now()}; state[c][i]=rec; emit();
     modules.setDoc(modules.doc(db,c,id),rec,{merge:true}).then(()=>{audit('update',c,id,before,rec);activity(c.slice(0,-1)+' updated',id)}).catch(console.error);
     return clone(rec);
