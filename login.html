@@ -68,8 +68,13 @@
         error.classList.remove('hidden');
         return;
       }
-      CRMData.setSession(email);
-      location.replace('./index.html#dashboard');
+      try {
+        CRMData.setSession(email);
+        location.replace('./index.html#dashboard');
+      } catch (err) {
+        error.textContent = err.message || 'Unable to sign in.';
+        error.classList.remove('hidden');
+      }
     });
 
     document.getElementById('forgotLink').addEventListener('click', (e) => {
