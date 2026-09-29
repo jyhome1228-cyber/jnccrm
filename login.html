@@ -49,9 +49,12 @@
     </section>
   </main>
 
+  <script src="./app-config.js"></script>
   <script src="./crm-store.js"></script>
+  <script src="./firebase-adapter.js"></script>
+  <script src="./data-provider.js"></script>
   <script>
-    const existing = CRMStore.getSession();
+    const existing = CRMData.getSession();
     if (existing) location.replace('./index.html');
 
     const form = document.getElementById('loginForm');
@@ -65,7 +68,7 @@
         error.classList.remove('hidden');
         return;
       }
-      CRMStore.setSession(email);
+      CRMData.setSession(email);
       location.replace('./index.html#dashboard');
     });
 
