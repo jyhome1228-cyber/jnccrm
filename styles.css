@@ -530,3 +530,10 @@ body{background:var(--bg);color:var(--ink)}
 .calendar-detail-description{font-size:11px;line-height:1.75;color:#6E5E55;margin:0;padding:14px 0 16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .calendar-detail-grid{margin-top:14px}
 .calendar-detail-modal .modal-actions{margin-top:18px}
+
+
+/* Brand contrast fixes */
+.brand .brand-product,
+.login-brand .brand-product{
+  color:#FFFFFF!important;
+}
