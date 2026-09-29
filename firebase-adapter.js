@@ -1,9 +1,9 @@
 (() => {
   const cfg = window.CRM_CONFIG.firebase;
-  const collections = ['customers','leads','projects','formulas','samples','quotations','orders','activities','auditLogs','users'];
+  const collections = ['customers','leads','projects','formulas','samples','quotations','orders','calendarEvents','activities','auditLogs','users'];
   const state = {
     schemaVersion: window.CRM_CONFIG.schemaVersion || 2,
-    customers:[], leads:[], projects:[], formulas:[], samples:[], quotations:[], orders:[],
+    customers:[], leads:[], projects:[], formulas:[], samples:[], quotations:[], orders:[], calendarEvents:[],
     activities:[], auditLogs:[], users:[],
     settings:{ companyName:'JN COS TECH', defaultCurrency:'INR', dateFormat:'YYYY-MM-DD' }
   };
@@ -14,7 +14,7 @@
   const now = () => new Date().toISOString();
 
   function nextId(collection){
-    const map={customers:'CUS',leads:'LED',projects:'PRJ',samples:'SMP',quotations:'QT',orders:'ORD',activities:'ACT',auditLogs:'AUD',users:'USR'};
+    const map={customers:'CUS',leads:'LED',projects:'PRJ',samples:'SMP',quotations:'QT',orders:'ORD',calendarEvents:'CAL',activities:'ACT',auditLogs:'AUD',users:'USR'};
     const nums=(state[collection]||[]).map(x=>{const m=String(x.id||'').match(/(\d+)(?!.*\d)/);return m?Number(m[1]):0;});
     return `${map[collection]||'REC'}-${String(Math.max(0,...nums)+1).padStart(3,'0')}`;
   }
@@ -51,11 +51,11 @@
   function allowedCollections(){
     const role=session?.role||'Staff';
     if(role==='Admin'||role==='Management') return collections;
-    if(role==='Sales') return ['customers','leads','projects','samples','quotations','orders','activities'];
-    if(role==='R&D') return ['customers','leads','projects','formulas','samples','quotations','orders','activities'];
-    if(role==='Operations') return ['customers','projects','samples','quotations','orders','activities'];
-    if(role==='Finance') return ['customers','projects','quotations','orders','activities'];
-    return ['customers','projects','samples','activities'];
+    if(role==='Sales') return ['customers','leads','projects','samples','quotations','orders','calendarEvents','activities'];
+    if(role==='R&D') return ['customers','leads','projects','formulas','samples','quotations','orders','calendarEvents','activities'];
+    if(role==='Operations') return ['customers','projects','samples','quotations','orders','calendarEvents','activities'];
+    if(role==='Finance') return ['customers','projects','quotations','orders','calendarEvents','activities'];
+    return ['customers','projects','samples','calendarEvents','activities'];
   }
 
   async function loadAll(){
