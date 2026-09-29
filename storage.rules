@@ -6,19 +6,49 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Phase 1 path convention:
-    // customers/{customerId}/...
-    // projects/{projectId}/brief/...
-    // projects/{projectId}/artwork/...
-    // projects/{projectId}/formula/...  (restricted further in production)
-    // samples/{sampleId}/...
-    // orders/{orderId}/...
-    //
-    // Firestore role lookup cannot be performed directly in Storage Rules.
-    // Use Firebase Auth custom claims for role enforcement before production.
+    function activeUser() {
+      return signedIn() && request.auth.token.active == true;
+    }
+
+    function roleIs(role) {
+      return activeUser() && request.auth.token.role == role;
+    }
+
+    function oneOfRoles(roles) {
+      return activeUser() && request.auth.token.role in roles;
+    }
+
+    match /customers/{customerId}/{allPaths=**} {
+      allow read: if activeUser();
+      allow write: if oneOfRoles(['Admin','Management','Sales']);
+    }
+
+    match /projects/{projectId}/brief/{allPaths=**} {
+      allow read: if activeUser();
+      allow write: if oneOfRoles(['Admin','Management','Sales','R&D']);
+    }
+
+    match /projects/{projectId}/artwork/{allPaths=**} {
+      allow read: if activeUser();
+      allow write: if oneOfRoles(['Admin','Management','Sales','R&D']);
+    }
+
+    match /projects/{projectId}/formula/{allPaths=**} {
+      allow read, write: if oneOfRoles(['Admin','Management','R&D']);
+    }
+
+    match /samples/{sampleId}/{allPaths=**} {
+      allow read: if activeUser();
+      allow write: if oneOfRoles(['Admin','Management','Sales','R&D']);
+    }
+
+    match /orders/{orderId}/{allPaths=**} {
+      allow read: if activeUser();
+      allow write: if oneOfRoles(['Admin','Management','Operations','Finance']);
+    }
 
     match /{allPaths=**} {
-      allow read, write: if signedIn();
+      allow read, write: if false;
     }
   }
 }
