@@ -29,6 +29,7 @@
     modules={...appMod,...authMod,...fsMod};
     app=modules.initializeApp(cfg);
     auth=modules.getAuth(app);
+    await modules.setPersistence(auth, modules.browserLocalPersistence);
     db=modules.getFirestore(app);
     return modules;
   }
@@ -96,12 +97,27 @@
     if(readyPromise) return readyPromise;
     readyPromise=(async()=>{
       await loadModules();
-      await new Promise(resolve=>{
-        const unsub=modules.onAuthStateChanged(auth,async user=>{
-          unsub();
-          if(user){ await loadProfile(user); await loadAll(); }
-          resolve();
-        },()=>resolve());
+      await new Promise((resolve,reject)=>{
+        let unsub = () => {};
+        unsub=modules.onAuthStateChanged(auth,async user=>{
+          try {
+            unsub();
+            if(user){
+              await loadProfile(user);
+              await loadAll();
+            } else {
+              session=null;
+            }
+            resolve();
+          } catch (error) {
+            try { await modules.signOut(auth); } catch (e) {}
+            session=null;
+            reject(error);
+          }
+        },error=>{
+          session=null;
+          reject(error);
+        });
       });
       return clone(state);
     })();
