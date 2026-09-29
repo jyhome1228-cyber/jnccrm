@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260929-1148" />
+  <link rel="stylesheet" href="./styles.css?v=20260929-calendar-month" />
 </head>
 <body>
   <div class="app-shell">
@@ -21,6 +21,7 @@
       </div>
 
       <nav class="nav" aria-label="Primary">
+        <a class="nav-item" href="#calendar" data-view="calendar"><i data-lucide="calendar-days"></i><span>Calendar</span></a>
         <a class="nav-item" href="#dashboard" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
         <a class="nav-item" href="#customers" data-view="customers"><i data-lucide="users"></i><span>Customers</span></a>
         <a class="nav-item" href="#leads" data-view="leads"><i data-lucide="user-plus"></i><span>Leads</span></a>
@@ -29,7 +30,6 @@
         <a class="nav-item" href="#quotations" data-view="quotations"><i data-lucide="file-text"></i><span>Quotations</span></a>
         <a class="nav-item" href="#orders" data-view="orders"><i data-lucide="shopping-cart"></i><span>Orders</span></a>
         <a class="nav-item" href="#operations" data-view="operations"><i data-lucide="blocks"></i><span>Operations</span></a>
-        <a class="nav-item" href="#calendar" data-view="calendar"><i data-lucide="calendar-days"></i><span>Calendar</span></a>
         <a class="nav-item" href="#settings" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></a>
       </nav>
 
@@ -72,10 +72,10 @@
   <div class="toast hidden" id="toast"></div>
 
   <input type="file" id="dataImportInput" class="hidden" accept=".json,application/json" />
-  <script src="./app-config.js?v=20260929-test1111b"></script>
-  <script src="./crm-store.js?v=20260929-test1111b"></script>
-  <script src="./firebase-adapter.js?v=20260929-test1111b"></script>
-  <script src="./data-provider.js?v=20260929-test1111b"></script>
-  <script src="./app.js?v=20260929-test1111b"></script>
+  <script src="./app-config.js?v=20260929-calendar-month"></script>
+  <script src="./crm-store.js?v=20260929-calendar-month"></script>
+  <script src="./firebase-adapter.js?v=20260929-calendar-month"></script>
+  <script src="./data-provider.js?v=20260929-calendar-month"></script>
+  <script src="./app.js?v=20260929-calendar-month"></script>
 </body>
 </html>
