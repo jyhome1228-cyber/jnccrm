@@ -35,7 +35,7 @@
       { id:'ORD-099', customerId:'CUS-002', projectId:'PRJ-019', po:'XYZ-PO-118', quantity:'5000', orderDate:'2026-09-15', committedDate:'2026-10-18', paymentStatus:'Paid', total:'₹2,100,000', advance:'₹1,050,000', balance:'₹0', paymentDue:'2026-09-25', readiness:'Ready', productionStatus:'Manufacturing', qcStatus:'Waiting', dispatchStatus:'Not Ready', updatedAt:'2026-09-28T12:00:00' }
     ],
     users: [
-      { id:'USR-000', name:'CRM Administrator', email:'admin@jncostech.com', department:'Management', role:'Admin', active:true },
+      { id:'USR-000', name:'JN COS Master', email:'admin@jncostech.com', department:'Management', role:'Admin', active:true },
       { id:'USR-001', name:'Ravi Kim', email:'ravi@jncostech.com', department:'Sales', role:'Sales', active:true },
       { id:'USR-002', name:'Maya Patel', email:'maya@jncostech.com', department:'R&D', role:'R&D', active:true },
       { id:'USR-003', name:'Jisoo Park', email:'jisoo@jncostech.com', department:'Sales', role:'Management', active:true }
@@ -299,15 +299,8 @@
     const existing = state.users.find(u => String(u.email || '').toLowerCase() === normalized);
     if (existing && existing.active === false) throw new Error('This user is inactive.');
 
-    const fallbackName = normalized.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-    const session = existing || {
-      id:'USR-LOCAL',
-      name:fallbackName || 'JN COS User',
-      email:normalized,
-      department:'General',
-      role:'Staff',
-      active:true
-    };
+    if (!existing) throw new Error('This account has not been created by the Master account.');
+    const session = existing;
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     return clone(session);
   }
