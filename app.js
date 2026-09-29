@@ -25,7 +25,10 @@
   let charts = [];
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
-  document.getElementById('sessionRole').textContent = session.role === 'Admin' ? 'Master Account' : ((session.department || 'General') + ' · ' + (session.role || 'Staff'));
+  document.getElementById('sessionRole').textContent =
+    session.email === 'test@jncostech.com'
+      ? 'Test Master · Demo'
+      : (session.role === 'Admin' ? 'Master Account' : ((session.department || 'General') + ' · ' + (session.role || 'Staff')));
   document.getElementById('sessionAvatar').textContent = initials(session.name || 'JN COS');
 
   const actionPermissions = {
@@ -102,6 +105,7 @@
 
     if (action === 'logout') {
       await CRMData.logout();
+      sessionStorage.removeItem('jnc-demo-mode');
       location.replace('./login.html');
       return;
     }
