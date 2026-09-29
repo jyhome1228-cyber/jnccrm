@@ -28,7 +28,7 @@
     'new-sample':['samples','create'], 'edit-sample':['samples','edit'],
     'new-quotation':['quotations','create'], 'edit-quotation':['quotations','edit'], 'convert-quotation':['orders','create'],
     'new-order':['orders','create'], 'edit-order':['orders','edit'], 'edit-operation':['operations','edit'],
-    'edit-project-brief':['projects','edit'], 'edit-project-formula':['projects','edit'], 'edit-project-packaging':['projects','edit'],
+    'edit-project-brief':['projects','edit'], 'edit-project-formula':['formulas','edit'], 'edit-project-packaging':['projects','edit'],
     'edit-project-artwork':['projects','edit'], 'edit-project-approval':['projects','approve'], 'edit-project-documents':['projects','edit'],
     'new-user':['users','manage'], 'edit-user':['users','manage'], 'toggle-user':['users','manage'],
     'export-data':['settings','view'], 'import-data':['settings','manage'], 'reset-data':['settings','manage']
@@ -601,7 +601,7 @@ function renderProjectDetail(id) {
       '<div class="project-tabs" id="projectTabs">' +
         projectTabButton('overview','Overview',true) +
         projectTabButton('brief','Product Brief') +
-        projectTabButton('formula','Formula') +
+        (CRMData.can('formulas','view') ? projectTabButton('formula','Formula') : '') +
         projectTabButton('packaging','Packaging') +
         projectTabButton('artwork','Artwork') +
         projectTabButton('approval','Approval') +
@@ -628,12 +628,12 @@ function renderProjectDetail(id) {
           '</div></section>' +
         '</section>' +
 
-        '<section class="project-tab-panel" data-project-panel="formula">' +
-          '<section class="panel"><div class="panel-head"><div><i data-lucide="flask-conical"></i><h2>Formula Control</h2></div><button data-action="edit-project-formula" data-id="' + esc(p.id) + '">Edit</button></div>' +
+        (CRMData.can('formulas','view') ? '<section class="project-tab-panel" data-project-panel="formula">' +
+          '<section class="panel"><div class="panel-head"><div><i data-lucide="flask-conical"></i><h2>Formula Control</h2></div>' + (CRMData.can('formulas','edit') ? '<button data-action="edit-project-formula" data-id="' + esc(p.id) + '">Edit</button>' : '') + '</div>' +
           '<div class="detail-grid compact project-detail-grid">' +
             detailItem('Formula Version',p.formulaVersion) + detailItem('Status',p.formulaStatus) + detailItem('R&D Owner',p.formulaOwner || p.rdOwner) + detailItem('Approval Date',p.formulaApprovalDate) +
           '</div><p class="body-copy section-note">' + esc(p.formulaComments || 'No formula notes.') + '</p></section>' +
-        '</section>' +
+        '</section>' : '') +
 
         '<section class="project-tab-panel" data-project-panel="packaging">' +
           '<section class="panel"><div class="panel-head"><div><i data-lucide="package"></i><h2>Packaging Specification</h2></div><button data-action="edit-project-packaging" data-id="' + esc(p.id) + '">Edit</button></div>' +
@@ -1053,7 +1053,7 @@ function renderSettings() {
   }
 
   function renderSearch(query) {
-    const results = CRMData.search(query);
+    const results = CRMData.search(query).filter(item => CRMData.can(item.collection, 'view'));
     pageRoot.innerHTML = pageHeading('Search','Results for "' + query + '".','') +
       '<section class="panel search-results">' +
       (results.map(item => {
