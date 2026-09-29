@@ -13,7 +13,7 @@
       appId: '1:273933039544:web:e27b619df0d840a9c3014d',
       masterUid: 'fFBItrZ2UcUnw2KFDOeiT6Unjnr1'
     },
-    collections: ['customers','leads','projects','formulas','samples','quotations','orders','users','activities','auditLogs'],
+    collections: ['customers','leads','projects','formulas','samples','quotations','orders','calendarEvents','users','activities','auditLogs'],
     roles: {
       Admin: {
         '*': ['view','create','edit','delete','approve','export','manage']
