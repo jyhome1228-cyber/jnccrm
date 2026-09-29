@@ -21,6 +21,47 @@
   document.getElementById('sessionRole').textContent = (session.department || 'General') + ' · ' + (session.role || 'Staff');
   document.getElementById('sessionAvatar').textContent = initials(session.name || 'JN COS');
 
+  const actionPermissions = {
+    'new-customer':['customers','create'], 'edit-customer':['customers','edit'], 'delete-customer':['customers','delete'],
+    'new-lead':['leads','create'], 'edit-lead':['leads','edit'], 'delete-lead':['leads','delete'], 'lead-to-project':['projects','create'],
+    'new-project':['projects','create'], 'edit-project':['projects','edit'], 'delete-project':['projects','delete'],
+    'new-sample':['samples','create'], 'edit-sample':['samples','edit'],
+    'new-quotation':['quotations','create'], 'edit-quotation':['quotations','edit'], 'convert-quotation':['orders','create'],
+    'new-order':['orders','create'], 'edit-order':['orders','edit'], 'edit-operation':['operations','edit'],
+    'edit-project-brief':['projects','edit'], 'edit-project-formula':['projects','edit'], 'edit-project-packaging':['projects','edit'],
+    'edit-project-artwork':['projects','edit'], 'edit-project-approval':['projects','approve'], 'edit-project-documents':['projects','edit'],
+    'new-user':['users','manage'], 'edit-user':['users','manage'], 'toggle-user':['users','manage'],
+    'export-data':['settings','view'], 'import-data':['settings','manage'], 'reset-data':['settings','manage']
+  };
+
+  function canAction(action, collection) {
+    if (action === 'project-tab' || action === 'logout') return true;
+    if (action === 'delete-record' && collection) return CRMData.can(collection, 'delete');
+    const requirement = actionPermissions[action];
+    return !requirement || CRMData.can(requirement[0], requirement[1]);
+  }
+
+  navItems.forEach(item => {
+    const resource = item.dataset.view;
+    if (!CRMData.can(resource, 'view')) item.classList.add('permission-hidden');
+  });
+
+  const dataImportInput = document.getElementById('dataImportInput');
+  dataImportInput.addEventListener('change', async () => {
+    const file = dataImportInput.files && dataImportInput.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      CRMData.importData(text);
+      toast('CRM backup imported.');
+      dataImportInput.value = '';
+      renderRoute();
+    } catch (error) {
+      dataImportInput.value = '';
+      openModal('<p class="eyebrow">IMPORT ERROR</p><h2>Backup could not be imported</h2><p class="modal-subtitle">' + esc(error.message || error) + '</p>');
+    }
+  });
+
   menuButton.addEventListener('click', () => sidebar.classList.toggle('open'));
   closeModalButton.addEventListener('click', closeModal);
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
@@ -46,6 +87,11 @@
     const action = button.dataset.action;
     const id = button.dataset.id || '';
     const collection = button.dataset.collection || '';
+
+    if (!canAction(action, collection)) {
+      toast('You do not have permission for this action.');
+      return;
+    }
 
     if (action === 'logout') {
       CRMData.logout();
@@ -77,6 +123,11 @@
     if (action === 'edit-project-approval') openProjectApprovalForm(id);
     if (action === 'edit-project-documents') openProjectDocumentsForm(id);
     if (action === 'project-tab') switchProjectTab(button.dataset.tab || 'overview');
+    if (action === 'new-user') openUserForm();
+    if (action === 'edit-user') openUserForm(id);
+    if (action === 'toggle-user') toggleUser(id);
+    if (action === 'export-data') exportCRMData();
+    if (action === 'import-data') dataImportInput.click();
     if (action === 'reset-data') {
       if (confirm('Reset all local CRM demo data?')) {
         CRMData.reset();
@@ -237,6 +288,14 @@
     const view = parts[0];
     const id = parts[1] || '';
     setActiveNav(view);
+
+    if (!CRMData.can(view, 'view')) {
+      pageRoot.innerHTML = pageHeading('Access Restricted','Your current role does not have access to this module.','') +
+        '<section class="panel access-panel"><i data-lucide="shield-alert"></i><h2>Permission required</h2><p>Ask an administrator to update your role if you need access.</p></section>';
+      lucide.createIcons();
+      return;
+    }
+
     if (view === 'dashboard') renderDashboard();
     else if (view === 'customers') id ? renderCustomerDetail(id) : renderCustomers();
     else if (view === 'leads') renderLeads();
@@ -907,19 +966,90 @@ function renderOperations() {
       '<section class="panel calendar-panel">' + (rows || '<p class="empty-text">No scheduled events.</p>') + '</section>';
   }
 
-  function renderSettings() {
+  
+function renderSettings() {
     const state = CRMData.getState();
+    const canManageUsers = CRMData.can('users','manage');
+    const canManageSettings = CRMData.can('settings','manage');
     const userRows = state.users.map(u =>
-      '<tr><td><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></td><td>' + esc(u.department) + '</td><td>' + badge(u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td></tr>'
+      '<tr><td><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></td><td>' + esc(u.department) + '</td><td>' + badge(u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td><td class="actions-cell">' +
+        (canManageUsers ? '<button class="row-action" data-action="edit-user" data-id="' + esc(u.id) + '"><i data-lucide="pencil"></i></button><button class="row-action" title="Toggle Active" data-action="toggle-user" data-id="' + esc(u.id) + '"><i data-lucide="power"></i></button>' : '') +
+      '</td></tr>'
     ).join('');
+
+    const audits = (state.auditLogs || []).slice(0,30).map(log =>
+      '<tr><td>' + fmtDate(log.createdAt) + '</td><td><strong>' + esc((log.actor && log.actor.name) || 'System') + '</strong><small class="cell-sub">' + esc((log.actor && log.actor.role) || '') + '</small></td><td>' + badge(log.action) + '</td><td>' + esc(log.collection) + '</td><td>' + esc(log.recordId) + '</td></tr>'
+    ).join('');
+
     pageRoot.innerHTML =
-      pageHeading('Settings','Manage users, roles and Phase 1 system preferences.','') +
+      pageHeading('Settings','Users, permissions, data readiness and migration tools.',
+        (canManageUsers ? '<button class="primary-button" data-action="new-user"><i data-lucide="user-plus"></i> New User</button>' : '')) +
       '<div class="record-grid">' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="building-2"></i><h2>System</h2></div></div><div class="detail-grid compact">' + detailItem('Company',state.settings.companyName) + detailItem('Currency',state.settings.defaultCurrency) + detailItem('Date Format',state.settings.dateFormat) + detailItem('Storage','Browser Local Storage') + '</div></section>' +
-        '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Phase 1 Roles</h2></div></div><div class="tag-list">' + ['Admin','Management','Sales','R&D','Operations','Finance'].map(r=>'<span>'+r+'</span>').join('') + '</div><p class="body-copy small-copy">Field-level permission enforcement will be connected when production authentication is added.</p></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="database"></i><h2>Data Layer</h2></div>' + badge(CRMData.providerName === 'local' ? 'Local Ready' : CRMData.providerName) + '</div><div class="detail-grid compact">' +
+          detailItem('Provider',CRMData.providerName) + detailItem('Schema Version',state.schemaVersion || '—') + detailItem('Company',state.settings.companyName) + detailItem('Currency',state.settings.defaultCurrency) +
+        '</div><p class="body-copy small-copy">The UI now uses a provider interface, so Firebase can replace the local adapter without rewriting the CRM screens.</p></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Role Model</h2></div></div><div class="tag-list">' + ['Admin','Management','Sales','R&D','Operations','Finance','Staff'].map(r=>'<span>'+r+'</span>').join('') + '</div><p class="body-copy small-copy">Frontend permission checks are active. Firebase Security Rules will enforce the same permissions on the backend.</p></section>' +
       '</div>' +
-      '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="users"></i><h2>Users</h2></div></div><div class="table-wrap"><table><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Status</th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
-      '<section class="panel danger-zone"><div><h2>Local Demo Data</h2><p>Reset customers, leads, projects, samples, quotations and orders to the starter dataset.</p></div><button class="secondary-button" data-action="reset-data">Reset Demo Data</button></section>';
+      '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="users"></i><h2>Users</h2></div><span class="count-pill">' + state.users.length + '</span></div><div class="table-wrap"><table><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
+      '<div class="record-grid settings-tools">' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="download"></i><h2>Backup & Migration</h2></div></div><p class="body-copy">Export the current local dataset before connecting Firebase. The same JSON can be used as a migration source.</p><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export JSON</button>' + (canManageSettings ? '<button class="secondary-button" data-action="import-data"><i data-lucide="upload"></i> Import JSON</button>' : '') + '</div></section>' +
+        '<section class="panel"><div class="panel-head"><div><i data-lucide="cloud-cog"></i><h2>Firebase Readiness</h2></div></div><div class="check-list"><span class="done"><i data-lucide="check"></i> Provider abstraction</span><span class="done"><i data-lucide="check"></i> Role model</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup / import</span><span><i data-lucide="circle"></i> Firebase credentials</span><span><i data-lucide="circle"></i> Deploy security rules</span></div></section>' +
+      '</div>' +
+      '<section class="panel table-panel"><div class="panel-head"><div><i data-lucide="scroll-text"></i><h2>Audit Log</h2></div><span class="count-pill">' + (state.auditLogs || []).length + '</span></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></section>' +
+      (canManageSettings ? '<section class="panel danger-zone"><div><h2>Local Demo Data</h2><p>Reset the browser dataset to the starter records. This action is intended for testing only.</p></div><button class="secondary-button" data-action="reset-data">Reset Demo Data</button></section>' : '');
+  }
+
+  function openUserForm(id) {
+    const u = id ? CRMData.get('users', id) : {};
+    const fields =
+      inputField('Name','name',u.name,'text',true) +
+      inputField('Email','email',u.email,'email',true) +
+      inputField('Department','department',u.department,'text',true) +
+      selectField('Role','role',u.role || 'Staff',['Admin','Management','Sales','R&D','Operations','Finance','Staff'],true) +
+      selectField('Status','activeStatus',u.active === false ? 'Inactive' : 'Active',['Active','Inactive'],true);
+    modalForm(id ? 'Edit User' : 'New User','Prepare CRM users and roles before Firebase Authentication is connected.',fields,id ? 'Save User' : 'Create User',data => {
+      data.active = data.activeStatus === 'Active';
+      delete data.activeStatus;
+      try {
+        id ? CRMData.update('users', id, data) : CRMData.create('users', data);
+        closeModal(); toast(id ? 'User updated.' : 'User created.'); renderRoute();
+      } catch (error) {
+        const form = document.getElementById('recordForm');
+        let errorEl = form.querySelector('.form-error');
+        if (!errorEl) {
+          errorEl = document.createElement('p');
+          errorEl.className = 'form-error';
+          form.appendChild(errorEl);
+        }
+        errorEl.textContent = error.message || error;
+      }
+    });
+  }
+
+  function toggleUser(id) {
+    const u = CRMData.get('users', id);
+    if (!u) return;
+    if (u.email === session.email && u.active !== false) {
+      toast('You cannot deactivate your own current session.');
+      return;
+    }
+    CRMData.update('users', id, {active:!u.active});
+    toast(u.active ? 'User deactivated.' : 'User activated.');
+    renderRoute();
+  }
+
+  function exportCRMData() {
+    const json = CRMData.exportData();
+    const blob = new Blob([json], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'jncos-crm-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('CRM backup exported.');
   }
 
   function renderSearch(query) {
@@ -939,8 +1069,18 @@ function renderOperations() {
   }
 
   function deleteRecord(collection, id, label) {
+    const dependencies = CRMData.getDependencies ? CRMData.getDependencies(collection, id) : [];
+    if (dependencies.length) {
+      const summary = dependencies.map(d => d.count + ' ' + d.collection).join(', ');
+      openModal('<p class="eyebrow">DELETE BLOCKED</p><h2>This record is still in use</h2><p class="modal-subtitle">Remove or reassign the linked records first: ' + esc(summary) + '.</p>');
+      return;
+    }
     if (!confirm('Delete this ' + label + '?')) return;
-    CRMData.remove(collection, id);
+    const result = CRMData.remove(collection, id);
+    if (result && result.ok === false) {
+      toast('This record cannot be deleted while linked records exist.');
+      return;
+    }
     toast(label.charAt(0).toUpperCase() + label.slice(1) + ' deleted.');
     renderRoute();
   }
