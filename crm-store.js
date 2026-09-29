@@ -36,6 +36,7 @@
     ],
     users: [
       { id:'USR-000', name:'JN COS Master', email:'admin@jncostech.com', department:'Management', role:'Admin', active:true },
+      { id:'USR-TEST', name:'Test Master', email:'test@jncostech.com', department:'Management', role:'Admin', active:true },
       { id:'USR-001', name:'Ravi Kim', email:'ravi@jncostech.com', department:'Sales', role:'Sales', active:true },
       { id:'USR-002', name:'Maya Patel', email:'maya@jncostech.com', department:'R&D', role:'R&D', active:true },
       { id:'USR-003', name:'Jisoo Park', email:'jisoo@jncostech.com', department:'Sales', role:'Management', active:true }
@@ -77,6 +78,10 @@
 
     if (!next.users.some(u => String(u.email || '').toLowerCase() === 'admin@jncostech.com')) {
       next.users.unshift(clone(base.users[0]));
+    }
+    if (!next.users.some(u => String(u.email || '').toLowerCase() === 'test@jncostech.com')) {
+      const testUser = base.users.find(u => u.email === 'test@jncostech.com');
+      if (testUser) next.users.unshift(clone(testUser));
     }
 
     return next;
