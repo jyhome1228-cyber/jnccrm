@@ -47,7 +47,9 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if activeUser() && (management() || request.auth.uid == userId);
+      // Bootstrap rule: an authenticated user must be able to read their own
+      // profile before role/active checks can be evaluated for other data.
+      allow read: if signedIn() && (request.auth.uid == userId || management());
       allow create, update, delete: if admin();
     }
 
