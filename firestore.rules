@@ -187,6 +187,16 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    match /calendarEvents/{eventId} {
+      allow read: if activeUser();
+      allow create, update: if activeUser();
+      allow delete: if management()
+        || (
+          activeUser()
+          && resource.data.createdByUid == request.auth.uid
+        );
+    }
+
     match /activities/{activityId} {
       allow read: if activeUser();
       allow create: if activeUser();
