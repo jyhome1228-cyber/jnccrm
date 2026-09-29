@@ -309,3 +309,22 @@ tbody tr:hover{background:#fafcff}
   .approval-card{grid-template-columns:1fr}
   .project-tabs{margin-left:-2px;margin-right:-2px}
 }
+
+
+.permission-hidden{display:none!important}
+.access-panel{min-height:420px;display:grid;place-items:center;text-align:center;align-content:center;gap:8px}
+.access-panel>svg{width:38px;height:38px;color:#7f8da1}
+.access-panel h2{margin:8px 0 0;font-size:16px}
+.access-panel p{margin:0;color:var(--muted);font-size:11px}
+.settings-tools{margin-top:14px}
+.settings-button-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.check-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 12px}
+.check-list span{display:flex;align-items:center;gap:7px;font-size:10px;color:#7b8798}
+.check-list span svg{width:14px}
+.check-list span.done{color:#2f865f;font-weight:600}
+.badge.info,.badge.warning,.badge.danger,.badge.success{font-weight:600}
+@media (max-width:760px){
+  .check-list{grid-template-columns:1fr}
+  .settings-button-row{flex-direction:column}
+  .settings-button-row button{justify-content:center}
+}
