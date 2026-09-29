@@ -41,6 +41,10 @@
       { id:'USR-002', name:'Maya Patel', email:'maya@jncostech.com', department:'R&D', role:'R&D', active:true },
       { id:'USR-003', name:'Jisoo Park', email:'jisoo@jncostech.com', department:'Sales', role:'Management', active:true }
     ],
+    calendarEvents: [
+      { id:'CAL-001', title:'Weekly Sales Meeting', date:'2026-09-29', time:'09:30', type:'Meeting', notes:'Weekly sales pipeline review.', createdBy:'Test Master', createdAt:'2026-09-28T10:00:00', updatedAt:'2026-09-28T10:00:00' },
+      { id:'CAL-002', title:'R&D Sample Review', date:'2026-10-02', time:'14:00', type:'Internal', notes:'Review open sample feedback with R&D.', createdBy:'Test Master', createdAt:'2026-09-28T10:00:00', updatedAt:'2026-09-28T10:00:00' }
+    ],
     activities: [
       { id:'ACT-001', text:'Sample V2 dispatched', meta:'PRJ-021 / ABC Cosmetics', createdAt:'2026-09-29T06:00:00' },
       { id:'ACT-002', text:'Customer feedback recorded', meta:'PRJ-019 / XYZ Beauty', createdAt:'2026-09-28T14:20:00' },
@@ -66,7 +70,7 @@
     const next = (input && typeof input === 'object') ? { ...input } : {};
     next.schemaVersion = SCHEMA_VERSION;
 
-    ['customers','leads','projects','samples','quotations','orders','users','activities','auditLogs'].forEach(key => {
+    ['customers','leads','projects','samples','quotations','orders','calendarEvents','users','activities','auditLogs'].forEach(key => {
       if (!Array.isArray(next[key])) next[key] = clone(base[key]);
     });
 
@@ -125,6 +129,7 @@
       quotations:(configured && configured.quotation) || 'QT',
       orders:(configured && configured.order) || 'ORD',
       users:'USR',
+      calendarEvents:'CAL',
       activities:'ACT',
       auditLogs:'AUD'
     }[collection] || 'REC';
@@ -328,7 +333,7 @@
     if (typeof payload === 'string') parsed = JSON.parse(payload);
     const incoming = parsed && parsed.data ? parsed.data : parsed;
     if (!incoming || typeof incoming !== 'object') throw new Error('Invalid CRM backup.');
-    ['customers','leads','projects','samples','quotations','orders','users'].forEach(key => {
+    ['customers','leads','projects','samples','quotations','orders','calendarEvents','users'].forEach(key => {
       if (!Array.isArray(incoming[key])) throw new Error('Backup is missing ' + key + '.');
     });
 
