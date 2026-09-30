@@ -25,6 +25,7 @@
   let charts = [];
   let calendarCursor = new Date();
   let calendarEventCache = [];
+  let calendarEventCache = [];
 
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
@@ -145,6 +146,12 @@
     if (action === 'new-calendar-event') openCalendarEventForm('', button.dataset.date || '');
     if (action === 'edit-calendar-event') openCalendarEventForm(id);
     if (action === 'delete-calendar-event') deleteCalendarEvent(id);
+    if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
+    if (action === 'calendar-open-related') {
+      const target = button.dataset.target || '#calendar';
+      closeModal();
+      location.hash = target.replace(/^#/, '');
+    }
     if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
     if (action === 'calendar-open-related') {
       const target = button.dataset.target || '#calendar';
@@ -1179,6 +1186,36 @@ function renderOperations() {
     const html =
       '<div class="calendar-detail-modal">' +
         '<div class="calendar-detail-top"><span class="calendar-detail-type">' + esc(event.type) + '</span><span class="calendar-detail-date">' + esc(event.date) + (event.time ? ' · ' + esc(event.time) : '') + '</span></div>' +
+        '<h2>' + esc(event.title) + '</h2>' +
+        '<p class="calendar-detail-description">' + esc(event.description || 'Review the related CRM record for this schedule.') + '</p>' +
+        '<div class="detail-grid compact calendar-detail-grid">' +
+          detailItem('Related', event.related || '—') +
+          detailItem('Record ID', event.recordId || '—') +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<button type="button" class="secondary-button" id="calendarDetailClose">Close</button>' +
+          '<button type="button" class="primary-button" data-action="calendar-open-related" data-target="' + esc(event.link || '#calendar') + '"><i data-lucide="arrow-up-right"></i> Open Related Record</button>' +
+        '</div>' +
+      '</div>';
+
+    openModal(html);
+    const close = document.getElementById('calendarDetailClose');
+    if (close) close.addEventListener('click', closeModal);
+  }
+
+  function showCalendarLinkedEvent(id) {
+    const event = calendarEventCache.find(e => e.id === id && e.system);
+    if (!event) {
+      toast('This linked schedule is no longer available.');
+      return;
+    }
+
+    const html =
+      '<div class="calendar-detail-modal">' +
+        '<div class="calendar-detail-top">' +
+          '<span class="calendar-detail-type">' + esc(event.type) + '</span>' +
+          '<span class="calendar-detail-date">' + esc(event.date) + (event.time ? ' · ' + esc(event.time) : '') + '</span>' +
+        '</div>' +
         '<h2>' + esc(event.title) + '</h2>' +
         '<p class="calendar-detail-description">' + esc(event.description || 'Review the related CRM record for this schedule.') + '</p>' +
         '<div class="detail-grid compact calendar-detail-grid">' +
