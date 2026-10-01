@@ -1,5 +1,6 @@
 // Live deployment smoke test
 // PDF import E2E
+// E2E QA trigger 2026-10-02
 import { chromium } from 'playwright';
 
 const base = process.env.CRM_BASE_URL || 'https://jyhome1228-cyber.github.io/jnccrm';
@@ -145,13 +146,17 @@ async function attachDiagnostics(page, label) {
 
   await leadRow.locator('[data-action="lead-to-project"]').click();
   await page.waitForURL(/#projects\//, {timeout:10000});
-  const projectText = await page.locator('#pageRoot').innerText();
-  assert(projectText.includes('Serum / Ampoule Development'), 'Lead → Project name mapping failed.');
+  await page.locator('#pageRoot h1').waitFor({state:'visible', timeout:10000});
+  await page.waitForTimeout(150);
+  const projectTitle = (await page.locator('#pageRoot h1').innerText()).replace(/\s+/g,' ').trim();
+  const projectText = (await page.locator('#pageRoot').innerText()).replace(/\s+/g,' ').trim();
+  assert(projectTitle.includes('Serum / Ampoule Development'), 'Lead → Project name mapping failed. Got: ' + projectTitle);
   assert(projectText.includes('Serum / Ampoule'), 'Lead → Project category mapping failed.');
   assert(projectText.includes('ODM'), 'Lead → Project service-type mapping failed.');
-  assert(projectText.includes('Idea / Early concept'), 'Lead → Project stage mapping failed.');
+  assert(projectText.includes('Idea / Early concept'), 'Lead → Project stage mapping failed. Got: ' + projectText.slice(0,500));
   await page.screenshot({ path:'artifacts/request-project-result.png', fullPage:true });
 
+  await page.evaluate(() => sessionStorage.clear());
   await page.goto(base + '/login.html', { waitUntil: 'networkidle', timeout: 30000 });
   await page.fill('#loginEmail', 'qa@example.com');
   await page.fill('#loginPassword', '1234');
