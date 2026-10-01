@@ -123,20 +123,20 @@
     }
     if (action === 'new-customer') openCustomerForm();
     if (action === 'edit-customer') openCustomerForm(id);
-    if (action === 'delete-customer') deleteRecord('customers', id, 'customer');
+    if (action === 'delete-customer') await deleteRecord('customers', id, 'customer');
     if (action === 'new-lead') openLeadForm();
     if (action === 'edit-lead') openLeadForm(id);
-    if (action === 'delete-lead') deleteRecord('leads', id, 'lead');
-    if (action === 'lead-to-project') convertLeadToProject(id);
-    if (action === 'new-project') openProjectForm();
+    if (action === 'delete-lead') await deleteRecord('leads', id, 'lead');
+    if (action === 'lead-to-project') await convertLeadToProject(id);
+    if (action === 'new-project') openProjectForm('', button.dataset.customerId ? {customerId:button.dataset.customerId} : undefined);
     if (action === 'edit-project') openProjectForm(id);
-    if (action === 'delete-project') deleteRecord('projects', id, 'project');
+    if (action === 'delete-project') await deleteRecord('projects', id, 'project');
     if (action === 'new-sample') openSampleForm(button.dataset.projectId || '');
     if (action === 'edit-sample') openSampleForm('', id);
-    if (action === 'delete-record' && collection) deleteRecord(collection, id, collection.slice(0,-1));
+    if (action === 'delete-record' && collection) await deleteRecord(collection, id, collection.slice(0,-1));
     if (action === 'new-quotation') openQuotationForm(button.dataset.projectId || '');
     if (action === 'edit-quotation') openQuotationForm('', id);
-    if (action === 'convert-quotation') convertQuotationToOrder(id);
+    if (action === 'convert-quotation') await convertQuotationToOrder(id);
     if (action === 'new-order') openOrderForm();
     if (action === 'edit-order') openOrderForm('', id);
     if (action === 'edit-operation') openOrderForm('', id, 'operations');
@@ -152,7 +152,7 @@
     if (action === 'calendar-today') { calendarCursor = new Date(); renderCalendar(); }
     if (action === 'new-calendar-event') openCalendarEventForm('', button.dataset.date || '');
     if (action === 'edit-calendar-event') openCalendarEventForm(id);
-    if (action === 'delete-calendar-event') deleteCalendarEvent(id);
+    if (action === 'delete-calendar-event') await deleteCalendarEvent(id);
     if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
     if (action === 'calendar-open-related') {
       const target = button.dataset.target || '#calendar';
@@ -162,7 +162,7 @@
     if (action === 'calendar-more') showCalendarDayEvents(button.dataset.date || '');
     if (action === 'new-user') openUserForm();
     if (action === 'edit-user') openUserForm(id);
-    if (action === 'toggle-user') toggleUser(id);
+    if (action === 'toggle-user') await toggleUser(id);
     if (action === 'export-data') exportCRMData();
     if (action === 'import-data') dataImportInput.click();
     if (action === 'reset-data') {
@@ -600,7 +600,7 @@ function getDashboardScope() {
     const quotes = CRMData.list('quotations').filter(q => projectIds.includes(q.projectId));
 
     pageRoot.innerHTML =
-      '<div class="detail-header"><div><a class="back-link" href="#customers"><i data-lucide="arrow-left"></i> Customers</a><p class="eyebrow">CUSTOMER 360°</p><h1>' + esc(c.company) + '</h1><p>' + esc(c.country) + ' · ' + esc(c.type) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-customer" data-id="' + esc(c.id) + '">Edit</button><button class="primary-button" data-action="new-project"><i data-lucide="plus"></i> New Project</button></div></div>' +
+      '<div class="detail-header"><div><a class="back-link" href="#customers"><i data-lucide="arrow-left"></i> Customers</a><p class="eyebrow">CUSTOMER 360°</p><h1>' + esc(c.company) + '</h1><p>' + esc(c.country) + ' · ' + esc(c.type) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-customer" data-id="' + esc(c.id) + '">Edit</button><button class="primary-button" data-action="new-project" data-customer-id="' + esc(c.id) + '"><i data-lucide="plus"></i> New Project</button></div></div>' +
       '<div class="detail-grid">' +
         detailItem('Customer ID',c.id) + detailItem('Status',c.status) + detailItem('Sales Owner',c.owner) + detailItem('Payment Terms',c.paymentTerms) +
         detailItem('Main Contact',c.contact) + detailItem('Email',c.email) + detailItem('Phone',c.phone) + detailItem('Country',c.country) +
@@ -663,17 +663,30 @@ function getDashboardScope() {
     });
   }
 
-  function convertLeadToProject(id) {
+  async function convertLeadToProject(id) {
     const lead = CRMData.get('leads', id);
     if (!lead) return;
-    let customer = CRMData.list('customers').find(c => c.company.toLowerCase() === lead.company.toLowerCase());
+    if (/Won|Lost/.test(lead.status || '')) {
+      toast('Closed leads cannot be converted to a new project.');
+      return;
+    }
+    const existingProject = CRMData.list('projects').find(p => p.sourceLeadId === id);
+    if (existingProject) {
+      toast('This lead is already linked to ' + existingProject.id + '.');
+      location.hash = '#projects/' + existingProject.id;
+      return;
+    }
+    let customer = CRMData.list('customers').find(c => String(c.company || '').toLowerCase() === String(lead.company || '').toLowerCase());
     if (!customer) {
-      customer = CRMData.create('customers', {
-        company:lead.company, country:lead.country, type:lead.type, contact:lead.contact, email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active', paymentTerms:'TBD', notes:'Created from ' + lead.id
+      customer = await CRMData.create('customers', {
+        company:lead.company, country:lead.country, type:lead.type, contact:lead.contact,
+        email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active',
+        paymentTerms:'TBD', notes:'Created from ' + lead.id
       });
     }
-    const project = CRMData.create('projects', {
+    const project = await CRMData.create('projects', {
       customerId:customer.id,
+      sourceLeadId:id,
       name:lead.company + ' New Product',
       category:'',
       salesOwner:lead.owner,
@@ -688,7 +701,7 @@ function getDashboardScope() {
       artworkStatus:'Not Started',
       approvalStatus:'Pending'
     });
-    CRMData.update('leads', id, {status:'Development'});
+    await CRMData.update('leads', id, {status:'Development'});
     toast('Project ' + project.id + ' created from lead.');
     location.hash = '#projects/' + project.id;
   }
@@ -949,16 +962,22 @@ function renderProjectDetail(id) {
       inputField('Tracking / AWB','tracking',s.tracking,'text',false) +
       inputField('Expected Feedback Date','feedbackDate',s.feedbackDate,'date',false) +
       textAreaField('Customer Feedback','feedback',s.feedback,true);
-    modalForm(sampleId ? 'Edit Sample' : 'New Sample','Create a new version without overwriting previous versions.',fields,sampleId ? 'Save Changes' : 'Create Sample',data => {
+    modalForm(sampleId ? 'Edit Sample' : 'New Sample','Create a new version without overwriting previous versions.',fields,sampleId ? 'Save Changes' : 'Create Sample',async data => {
       const pid = String(data.projectOption || '').split(' | ')[0];
       delete data.projectOption;
       data.projectId = pid;
       if (!sampleId) {
         const versionNum = String(data.version || 'V1').replace(/\D/g,'') || '1';
         data.id = 'SMP-' + pid.replace(/\D/g,'').padStart(3,'0') + '-V' + versionNum;
+        if (CRMData.get('samples', data.id)) {
+          throw new Error('This sample version already exists. Use a new version number.');
+        }
       }
-      sampleId ? CRMData.update('samples', sampleId, data) : CRMData.create('samples', data);
-      closeModal(); toast(sampleId ? 'Sample updated.' : 'Sample created.'); renderRoute();
+      if (sampleId) await CRMData.update('samples', sampleId, data);
+      else await CRMData.create('samples', data);
+      closeModal();
+      toast(sampleId ? 'Sample updated.' : 'Sample created.');
+      renderRoute();
     });
   }
 
@@ -1000,7 +1019,7 @@ function renderQuotations() {
     });
   }
 
-  function convertQuotationToOrder(id) {
+  async function convertQuotationToOrder(id) {
     const q = CRMData.get('quotations', id);
     if (!q) return;
     if (q.status !== 'Accepted') {
@@ -1012,8 +1031,8 @@ function renderQuotations() {
       return;
     }
     const project = CRMData.get('projects', q.projectId);
-    if (!project) return;
-    const order = CRMData.create('orders', {
+    if (!project) throw new Error('Linked project could not be found.');
+    const order = await CRMData.create('orders', {
       quoteId:q.id,
       customerId:project.customerId,
       projectId:project.id,
@@ -1050,30 +1069,59 @@ function renderOrders() {
     const projects = CRMData.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
     const selected = o.projectId ? o.projectId + ' | ' + getProjectName(o.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
-    const fields =
-      selectField('Project','projectOption',selected,options,true) +
-      inputField('Customer PO','po',o.po,'text',false) +
-      inputField('Quantity','quantity',o.quantity,'number',true) +
-      inputField('Order Date','orderDate',o.orderDate || localDateKey(),'date',true) +
-      inputField('Committed Date','committedDate',o.committedDate,'date',false) +
-      selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
-      selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
-      selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
-      selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
-      inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
-      inputField('Order Value','total',o.total,'text',false) +
-      inputField('Advance Received','advance',o.advance,'text',false) +
-      inputField('Balance','balance',o.balance,'text',false) +
-      inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
-      selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true) +
-      textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
-    modalForm(orderId ? 'Update Order' : 'New Order','Use one record to manage commercial and operational status.',fields,orderId ? 'Save Changes' : 'Create Order',data => {
-      const pid = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      const project = CRMData.get('projects', pid);
-      data.projectId = pid; data.customerId = project ? project.customerId : '';
-      if (orderId) CRMData.update('orders', orderId, data);
-      else CRMData.create('orders', data);
-      closeModal(); toast(orderId ? 'Order updated.' : 'Order created.');
+    const operationsOnly = Boolean(orderId) && (returnView === 'operations' || session.role === 'Operations');
+    const financeOnly = Boolean(orderId) && session.role === 'Finance';
+
+    let fields = '';
+    if (operationsOnly) {
+      fields =
+        inputField('Committed Date','committedDate',o.committedDate,'date',false) +
+        selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
+        selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
+        selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
+        selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
+        inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
+        textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
+    } else if (financeOnly) {
+      fields =
+        inputField('Order Value','total',o.total,'text',false) +
+        inputField('Advance Received','advance',o.advance,'text',false) +
+        inputField('Balance','balance',o.balance,'text',false) +
+        inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
+        selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true);
+    } else {
+      fields =
+        selectField('Project','projectOption',selected,options,true) +
+        inputField('Customer PO','po',o.po,'text',false) +
+        inputField('Quantity','quantity',o.quantity,'number',true) +
+        inputField('Order Date','orderDate',o.orderDate || localDateKey(),'date',true) +
+        inputField('Committed Date','committedDate',o.committedDate,'date',false) +
+        selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
+        selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
+        selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
+        selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
+        inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
+        inputField('Order Value','total',o.total,'text',false) +
+        inputField('Advance Received','advance',o.advance,'text',false) +
+        inputField('Balance','balance',o.balance,'text',false) +
+        inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
+        selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true) +
+        textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
+    }
+
+    modalForm(orderId ? 'Update Order' : 'New Order','Use one record to manage commercial and operational status.',fields,orderId ? 'Save Changes' : 'Create Order',async data => {
+      if (!operationsOnly && !financeOnly) {
+        const pid = String(data.projectOption).split(' | ')[0];
+        delete data.projectOption;
+        const project = CRMData.get('projects', pid);
+        if (!project) throw new Error('Select a valid project.');
+        data.projectId = pid;
+        data.customerId = project.customerId;
+      }
+      if (orderId) await CRMData.update('orders', orderId, data);
+      else await CRMData.create('orders', data);
+      closeModal();
+      toast(orderId ? 'Order updated.' : 'Order created.');
       if (returnView === 'operations') location.hash = '#operations';
       else renderRoute();
     });
@@ -1084,7 +1132,7 @@ function renderOperations() {
     const orders = CRMData.list('orders');
     const cards = orders.map(o =>
       '<article class="operation-card"><div class="operation-head"><div><span>' + esc(o.id) + '</span><h3>' + esc(getProjectName(o.projectId)) + '</h3><p>' + esc(getCustomerName(o.customerId)) + '</p></div>' + badge(o.productionStatus) + '</div>' +
-      '<div class="operation-steps"><div class="' + (/Materials|Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.qcStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Dispatched|In Transit|Delivered/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div>' +
+      '<div class="operation-steps"><div class="' + (/Materials Ready|Manufacturing|Filling \/ Packing|QC Hold|Released|Ready to Dispatch/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling \/ Packing|QC Hold|Released|Ready to Dispatch/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.qcStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Dispatched|In Transit|Delivered/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div>' +
       '<div class="detail-grid compact">' + detailItem('Quantity',o.quantity) + detailItem('Committed',o.committedDate) + detailItem('QC',o.qcStatus) + detailItem('Dispatch',o.dispatchStatus) + '</div>' +
       (o.operationsNotes ? '<p class="body-copy operation-note">' + esc(o.operationsNotes) + '</p>' : '') +
       '<div class="operation-actions"><button class="secondary-button" data-action="edit-operation" data-id="' + esc(o.id) + '"><i data-lucide="sliders-horizontal"></i> Update Status</button></div></article>'
@@ -1186,7 +1234,7 @@ function renderOperations() {
         '<div class="calendar-cell-head"><button class="calendar-day-number" data-action="new-calendar-event" data-date="' + key + '">' + d.getDate() + '</button>' +
         (key===todayKey ? '<span class="today-label">Today</span>' : '') + '</div>' +
         '<div class="calendar-cell-events">' + eventHtml +
-        (dayEvents.length>3 ? '<button class="calendar-more" data-action="new-calendar-event" data-date="' + key + '">+' + (dayEvents.length-3) + ' more</button>' : '') +
+        (dayEvents.length>3 ? '<button class="calendar-more" data-action="calendar-more" data-date="' + key + '">+' + (dayEvents.length-3) + ' more</button>' : '') +
         '</div></div>';
     }
 
@@ -1215,6 +1263,17 @@ function renderOperations() {
       '<div class="calendar-legend"><span><i class="legend-dot manual"></i> Manual schedule</span><span><i class="legend-dot system"></i> CRM linked schedule</span></div>';
 
     lucide.createIcons();
+  }
+
+  function showCalendarDayEvents(date) {
+    const events = calendarEventCache.filter(e => e.date === date);
+    const rows = events.map(e => {
+      const action = e.system ? 'calendar-linked-event' : 'edit-calendar-event';
+      const meta = (e.time ? e.time + ' · ' : '') + (e.type || 'Schedule');
+      return '<button type="button" class="calendar-day-list-item" data-action="' + action + '" data-id="' + esc(e.id) + '">' +
+        '<span>' + esc(meta) + '</span><strong>' + esc(e.title) + '</strong><i data-lucide="chevron-right"></i></button>';
+    }).join('');
+    openModal('<p class="eyebrow">CALENDAR</p><h2>' + esc(date) + '</h2><p class="modal-subtitle">All schedules for this date.</p><div class="calendar-day-list">' + (rows || '<p class="empty-text">No schedules.</p>') + '</div>');
   }
 
   function showCalendarLinkedEvent(id) {
@@ -1255,11 +1314,11 @@ function renderOperations() {
       selectField('Type','type',e.type || 'Meeting',['Meeting','Internal','Follow-up','Deadline','Production','Dispatch','Payment','Other'],true) +
       textAreaField('Notes','notes',e.notes,true);
 
-    modalForm(id ? 'Edit Schedule' : 'Add Schedule','Add an internal schedule directly to the CRM calendar.',fields,id ? 'Save Schedule' : 'Add Schedule',data => {
+    modalForm(id ? 'Edit Schedule' : 'Add Schedule','Add an internal schedule directly to the CRM calendar.',fields,id ? 'Save Schedule' : 'Add Schedule',async data => {
       data.createdBy = e.createdBy || session.name;
       data.createdByUid = e.createdByUid || session.uid || session.id || '';
-      if (id) CRMData.update('calendarEvents', id, data);
-      else CRMData.create('calendarEvents', data);
+      if (id) await CRMData.update('calendarEvents', id, data);
+      else await CRMData.create('calendarEvents', data);
       closeModal();
       toast(id ? 'Schedule updated.' : 'Schedule added.');
       const d = new Date(data.date+'T00:00:00');
@@ -1269,7 +1328,8 @@ function renderOperations() {
 
     if (id) {
       const actions = document.querySelector('#recordForm .modal-actions');
-      if (actions) {
+      const canDeleteThisEvent = ['Admin','Management'].includes(session.role) || (e.createdByUid && e.createdByUid === session.uid);
+      if (actions && canDeleteThisEvent) {
         const del = document.createElement('button');
         del.type='button';
         del.className='secondary-button calendar-delete-button';
@@ -1282,9 +1342,9 @@ function renderOperations() {
     }
   }
 
-  function deleteCalendarEvent(id) {
+  async function deleteCalendarEvent(id) {
     if (!confirm('Delete this schedule?')) return;
-    const result = CRMData.remove('calendarEvents', id);
+    const result = await CRMData.remove('calendarEvents', id);
     if (result && result.ok === false) {
       toast('This schedule could not be deleted.');
       return;
@@ -1374,14 +1434,14 @@ function renderOperations() {
     });
   }
 
-  function toggleUser(id) {
+  async function toggleUser(id) {
     const u = CRMData.get('users', id);
     if (!u) return;
     if (u.email === session.email && u.active !== false) {
       toast('You cannot deactivate your own current session.');
       return;
     }
-    CRMData.update('users', id, {active:!u.active});
+    await CRMData.update('users', id, {active:!u.active});
     toast(u.active ? 'User deactivated.' : 'User activated.');
     renderRoute();
   }
@@ -1416,7 +1476,7 @@ function renderOperations() {
     lucide.createIcons();
   }
 
-  function deleteRecord(collection, id, label) {
+  async function deleteRecord(collection, id, label) {
     const dependencies = CRMData.getDependencies ? CRMData.getDependencies(collection, id) : [];
     if (dependencies.length) {
       const summary = dependencies.map(d => d.count + ' ' + d.collection).join(', ');
@@ -1424,7 +1484,7 @@ function renderOperations() {
       return;
     }
     if (!confirm('Delete this ' + label + '?')) return;
-    const result = CRMData.remove(collection, id);
+    const result = await CRMData.remove(collection, id);
     if (result && result.ok === false) {
       toast('This record cannot be deleted while linked records exist.');
       return;
