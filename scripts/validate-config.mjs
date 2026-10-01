@@ -14,6 +14,8 @@ const requiredFiles = [
   'app-config.js',
   'data-provider.js',
   'firebase-adapter.js',
+  'request-pdf-parser.js',
+  'scripts/test-request-parser.mjs',
   'firestore.rules',
   'storage.rules',
   'DATA_MODEL.md',
@@ -30,6 +32,7 @@ const scriptOrder = [
   './crm-store.js',
   './firebase-adapter.js',
   './data-provider.js',
+  './request-pdf-parser.js',
   './app.js'
 ];
 
@@ -76,3 +79,18 @@ if (!/jnc-demo-mode/.test(provider) || !/window\.CRMStore/.test(provider)) {
 }
 
 console.log('Production launch checks passed.');
+
+
+if (!/pdf\.js\/3\.11\.174\/pdf\.min\.js/.test(index)) {
+  throw new Error('index.html must load the PDF.js runtime.');
+}
+if (!/id="requestPdfInput"/.test(index)) {
+  throw new Error('Request PDF file input is missing.');
+}
+if (!/import-request-pdf/.test(appJs) || !/importRequestPdf/.test(appJs)) {
+  throw new Error('Request PDF import action is missing from app.js.');
+}
+if (!/sourceDocumentId/.test(appJs) || !/Website Request PDF/.test(appJs)) {
+  throw new Error('Request PDF → Lead mapping is incomplete.');
+}
+console.log('Request PDF import checks passed.');
