@@ -153,6 +153,7 @@ async function attachDiagnostics(page, label) {
   assert(projectText.includes('Idea / Early concept'), 'Lead → Project stage mapping failed.');
   await page.screenshot({ path:'artifacts/request-project-result.png', fullPage:true });
 
+  await page.evaluate(() => sessionStorage.clear());
   await page.goto(base + '/login.html', { waitUntil: 'networkidle', timeout: 30000 });
   await page.fill('#loginEmail', 'qa@example.com');
   await page.fill('#loginPassword', '1234');
