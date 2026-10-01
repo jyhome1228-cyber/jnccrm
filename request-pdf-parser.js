@@ -19,6 +19,12 @@
   const FIELD_SET = new Set(FIELD_LABELS);
   const SECTION_SET = new Set(SECTION_LABELS);
   const ALL_LABELS = [...FIELD_LABELS, ...SECTION_LABELS].sort((a,b) => b.length - a.length);
+  const compact = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]+/g,'');
+  const FIELD_BY_COMPACT = new Map(FIELD_LABELS.map(label => [compact(label), label]));
+  const SECTION_BY_COMPACT = new Map(SECTION_LABELS.map(label => [compact(label), label]));
+  const LABEL_COMPACTS = [...FIELD_LABELS, ...SECTION_LABELS]
+    .map(label => ({label,key:compact(label),field:FIELD_SET.has(label)}))
+    .sort((a,b) => b.key.length - a.key.length);
 
   function normalizeSpace(value) {
     return String(value || '')
@@ -30,6 +36,85 @@
 
   function canonical(value) {
     return normalizeSpace(value).replace(/\n/g,' ').toUpperCase();
+  }
+
+  function segmentLabelsFromCompact(value, allowedMap) {
+    const key = compact(value);
+    if (!key) return [];
+    const direct = allowedMap.get(key);
+    if (direct) return [direct];
+
+    const choices = [...allowedMap.entries()]
+      .map(([part,label]) => ({part,label}))
+      .sort((a,b) => b.part.length - a.part.length);
+    const memo = new Map();
+
+    function solve(offset) {
+      if (offset === key.length) return [];
+      if (memo.has(offset)) return memo.get(offset);
+      for (const choice of choices) {
+        if (!key.startsWith(choice.part, offset)) continue;
+        const rest = solve(offset + choice.part.length);
+        if (rest) {
+          const result = [choice.label, ...rest];
+          memo.set(offset, result);
+          return result;
+        }
+      }
+      memo.set(offset, null);
+      return null;
+    }
+
+    return solve(0) || [];
+  }
+
+  function rowLabels(cells) {
+    const joined = cells.join(' ');
+    const sectionOnly = segmentLabelsFromCompact(joined, SECTION_BY_COMPACT);
+    if (sectionOnly.length === 1) return {type:'section', labels:sectionOnly};
+
+    // First try each visual cell independently.
+    const perCell = [];
+    let allCellsAreLabels = true;
+    for (const cell of cells) {
+      const labels = segmentLabelsFromCompact(cell, FIELD_BY_COMPACT);
+      if (!labels.length) {
+        allCellsAreLabels = false;
+        break;
+      }
+      perCell.push(...labels);
+    }
+    if (allCellsAreLabels && perCell.length) return {type:'fields',labels:perCell};
+
+    // PDF.js can fragment a label across several text items/cells. Greedily
+    // combine adjacent fragments until they match a known field label.
+    const labels = [];
+    let index = 0;
+    while (index < cells.length) {
+      let matched = null;
+      let matchedEnd = index;
+      for (let end = Math.min(cells.length, index + 24); end > index; end--) {
+        const candidate = cells.slice(index,end).join(' ');
+        const segmented = segmentLabelsFromCompact(candidate, FIELD_BY_COMPACT);
+        if (segmented.length === 1) {
+          matched = segmented[0];
+          matchedEnd = end;
+          break;
+        }
+      }
+      if (!matched) {
+        labels.length = 0;
+        break;
+      }
+      labels.push(matched);
+      index = matchedEnd;
+    }
+    if (labels.length) return {type:'fields',labels};
+
+    // Last structured-row fallback: one PDF text cell may contain a whole
+    // label row such as TYPE STATUS EMAIL PHONE / WHATSAPP.
+    const combined = segmentLabelsFromCompact(joined, FIELD_BY_COMPACT);
+    return combined.length ? {type:'fields',labels:combined} : {type:'none',labels:[]};
   }
 
   function emptyToBlank(value) {
@@ -56,31 +141,55 @@
 
     while (i < rows.length) {
       const row = rows[i];
-      const labels = row.map(canonical);
+      const detected = rowLabels(row);
 
-      if (row.length === 1 && SECTION_SET.has(labels[0])) {
+      if (detected.type === 'section') {
+        i += 1;
+        continue;
+      }
+      if (detected.type !== 'fields' || !detected.labels.length) {
         i += 1;
         continue;
       }
 
-      const isLabelRow = labels.length > 0 && labels.every(label => FIELD_SET.has(label));
-      if (!isLabelRow) {
-        i += 1;
-        continue;
-      }
+      const labels = detected.labels;
 
-      if (row.length > 1) {
+      if (labels.length > 1) {
         let j = i + 1;
         while (j < rows.length && isNoiseCells(rows[j])) j += 1;
         if (j < rows.length) {
           const next = rows[j];
-          const nextLabels = next.map(canonical);
-          const nextIsLabels = nextLabels.length > 0 && nextLabels.every(label => FIELD_SET.has(label) || SECTION_SET.has(label));
+          const nextDetected = rowLabels(next);
 
-          if (!nextIsLabels) {
+          if (nextDetected.type === 'none') {
+            // Normal case: next visual row has one value cell per label.
+            if (next.length === labels.length) {
+              labels.forEach((label,index) => {
+                if (!values[label]) values[label] = emptyToBlank(next[index] || '');
+              });
+              i = j + 1;
+              continue;
+            }
+
+            // If PDF.js fragmented value text into extra cells, distribute
+            // sequentially while preserving the final cell for the final label.
+            if (next.length > labels.length) {
+              const remaining = [...next];
+              labels.forEach((label,index) => {
+                if (values[label]) return;
+                const labelsLeft = labels.length - index;
+                const take = index === labels.length - 1
+                  ? remaining.length
+                  : Math.max(1, remaining.length - (labelsLeft - 1));
+                values[label] = emptyToBlank(remaining.splice(0,take).join(' '));
+              });
+              i = j + 1;
+              continue;
+            }
+
+            // Fewer cells than labels: preserve what can be mapped by order.
             labels.forEach((label,index) => {
-              if (values[label]) return;
-              values[label] = emptyToBlank(next[index] || '');
+              if (!values[label] && next[index]) values[label] = emptyToBlank(next[index]);
             });
             i = j + 1;
             continue;
@@ -98,10 +207,8 @@
             continue;
           }
 
-          const nextLabels = next.map(canonical);
-          const hitsSection = next.length === 1 && SECTION_SET.has(nextLabels[0]);
-          const hitsLabelRow = nextLabels.length > 0 && nextLabels.every(item => FIELD_SET.has(item));
-          if (hitsSection || hitsLabelRow) break;
+          const nextDetected = rowLabels(next);
+          if (nextDetected.type === 'section' || nextDetected.type === 'fields') break;
 
           collected.push(next.join(' '));
           j += 1;
@@ -126,20 +233,52 @@
       .trim();
   }
 
-  function occurrences(text) {
-    const upper = text.toUpperCase();
-    const found = [];
-    for (const label of ALL_LABELS) {
-      let from = 0;
-      const needle = label.toUpperCase();
-      while (from < upper.length) {
-        const index = upper.indexOf(needle, from);
-        if (index < 0) break;
-        found.push({ label, index, end:index + label.length });
-        from = index + label.length;
+  function compactTextWithMap(text) {
+    const original = String(text || '');
+    let normalized = '';
+    const map = [];
+    for (let i=0;i<original.length;i++) {
+      const ch = original[i].toUpperCase();
+      if (/[A-Z0-9]/.test(ch)) {
+        normalized += ch;
+        map.push(i);
       }
     }
-    return found.sort((a,b) => a.index - b.index || b.label.length - a.label.length);
+    return {original,normalized,map};
+  }
+
+  function occurrences(text) {
+    const source = compactTextWithMap(text);
+    const candidates = [];
+
+    for (const item of LABEL_COMPACTS) {
+      let from = 0;
+      while (from < source.normalized.length) {
+        const index = source.normalized.indexOf(item.key, from);
+        if (index < 0) break;
+        const endIndex = index + item.key.length - 1;
+        candidates.push({
+          label:item.label,
+          compactStart:index,
+          compactEnd:index + item.key.length,
+          index:source.map[index] ?? 0,
+          end:(source.map[endIndex] ?? source.original.length - 1) + 1,
+          length:item.key.length
+        });
+        from = index + Math.max(1,item.key.length);
+      }
+    }
+
+    candidates.sort((a,b) => a.compactStart - b.compactStart || b.length - a.length);
+    const accepted = [];
+    for (const candidate of candidates) {
+      const overlaps = accepted.some(existing =>
+        candidate.compactStart < existing.compactEnd &&
+        candidate.compactEnd > existing.compactStart
+      );
+      if (!overlaps) accepted.push(candidate);
+    }
+    return accepted.sort((a,b) => a.index - b.index);
   }
 
   function valueAfter(text, label, occurrenceIndex = 0) {
@@ -148,8 +287,9 @@
     const current = matches[occurrenceIndex];
     if (!current) return '';
 
-    const next = found.find(x => x.index >= current.end && x.label !== label);
-    const raw = text.slice(current.end, next ? next.index : text.length);
+    const currentPosition = found.indexOf(current);
+    const next = found.slice(currentPosition + 1).find(x => x.index >= current.end);
+    const raw = String(text || '').slice(current.end, next ? next.index : String(text || '').length);
     return normalizeSpace(raw)
       .replace(/^[\s:·—-]+/,'')
       .replace(/[\s:·—-]+$/,'')
@@ -220,9 +360,10 @@
     parsed.status = 'New';
     parsed.warnings = [];
 
-    const looksStandard = /PROJECT REQUEST SUMMARY/i.test(input)
-      && /COMPANY \/ BRAND/i.test(input)
-      && /SERVICE TYPE/i.test(input);
+    const inputCompact = compact(input);
+    const looksStandard = inputCompact.includes(compact('PROJECT REQUEST SUMMARY'))
+      && inputCompact.includes(compact('COMPANY / BRAND'))
+      && inputCompact.includes(compact('SERVICE TYPE'));
 
     if (!looksStandard) parsed.warnings.push('This PDF does not match the standard JN COS TECH request format.');
     if (!parsed.company) parsed.warnings.push('Company / Brand was not detected.');
