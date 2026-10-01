@@ -58,8 +58,8 @@ if (linkedCalendarFnCount !== 1) {
   throw new Error(`Expected exactly one showCalendarLinkedEvent function, found ${linkedCalendarFnCount}`);
 }
 
-if (/test@jncostech\.com|Test login|\/ 1111/.test(login)) {
-  throw new Error('Production login must not expose test credentials.');
+if (!/test@jncostech\.com/.test(login) || !/Test login/.test(login) || !/1111/.test(login)) {
+  throw new Error('Dedicated test login must remain available.');
 }
 
 if (!/name="robots" content="noindex,nofollow,noarchive"/.test(login) || !/name="robots" content="noindex,nofollow,noarchive"/.test(index)) {
@@ -70,8 +70,9 @@ if (!/dataProvider:\s*'firebase'/.test(appConfig)) {
   throw new Error('Production CRM must use the Firebase data provider.');
 }
 
-if (/jnc-demo-mode/.test(fs.readFileSync('data-provider.js','utf8'))) {
-  throw new Error('Production data provider must not support demo-mode fallback.');
+const provider = fs.readFileSync('data-provider.js','utf8');
+if (!/jnc-demo-mode/.test(provider) || !/window\.CRMStore/.test(provider)) {
+  throw new Error('Dedicated test login must route to the isolated demo provider.');
 }
 
 console.log('Production launch checks passed.');
