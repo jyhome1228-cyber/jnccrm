@@ -9,7 +9,7 @@
   }
   const session = CRMData.getSession();
   if (!session) {
-    location.replace('./login.html');
+    location.replace('./login.html?v=20261002-pdf3');
     return;
   }
 
@@ -122,7 +122,7 @@
     if (action === 'logout') {
       await CRMData.logout();
       sessionStorage.removeItem('jnc-demo-mode');
-      location.replace('./login.html');
+      location.replace('./login.html?v=20261002-pdf3');
       return;
     }
     if (action === 'new-customer') openCustomerForm();
