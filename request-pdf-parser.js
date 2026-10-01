@@ -1,6 +1,6 @@
 (() => {
   const FIELD_LABELS = [
-    'DOCUMENT','INQUIRY','TYPE','STATUS','EMAIL','PHONE / WHATSAPP',
+    'EXPORTED','DOCUMENT','INQUIRY','TYPE','STATUS','EMAIL','PHONE / WHATSAPP',
     'COMPANY / BRAND','CONTACT PERSON','POSITION','COMPANY TYPE',
     'COUNTRY / REGION','WEBSITE / SOCIAL','PREFERRED CONTACT METHOD','PREFERRED CONTACT TIME',
     'SERVICE TYPE','PRODUCT CATEGORIES','PROJECT STAGE','TARGET MARKETS','LAUNCH TIMING','INITIAL QUANTITY',
@@ -16,22 +16,111 @@
     'PACKAGING & MARKET REQUIREMENTS','ADDITIONAL REQUIREMENTS'
   ];
 
-  const ALL_LABELS = [...FIELD_LABELS, ...SECTION_LABELS]
-    .sort((a,b) => b.length - a.length);
+  const FIELD_SET = new Set(FIELD_LABELS);
+  const SECTION_SET = new Set(SECTION_LABELS);
+  const ALL_LABELS = [...FIELD_LABELS, ...SECTION_LABELS].sort((a,b) => b.length - a.length);
 
   function normalizeSpace(value) {
     return String(value || '')
       .replace(/\u00a0/g,' ')
-      .replace(/[\t\r\n]+/g,' ')
-      .replace(/\s{2,}/g,' ')
+      .replace(/[ \t]+/g,' ')
+      .replace(/\s*\n\s*/g,'\n')
       .trim();
+  }
+
+  function canonical(value) {
+    return normalizeSpace(value).replace(/\n/g,' ').toUpperCase();
+  }
+
+  function emptyToBlank(value) {
+    const v = normalizeSpace(value);
+    return (!v || v === '—' || v === '-') ? '' : v;
+  }
+
+  function isNoiseCells(cells) {
+    const joined = cells.join(' ');
+    return /jncostech\.com\/admin/i.test(joined)
+      || /Generated from Admin Dashboard/i.test(joined)
+      || /JN COS TECH Request/i.test(joined)
+      || /^\d+\/\d+$/.test(joined.trim());
+  }
+
+  function parseStructured(input) {
+    const rows = String(input || '')
+      .split(/\n+/)
+      .map(line => line.split('\t').map(normalizeSpace).filter(Boolean))
+      .filter(row => row.length && !isNoiseCells(row));
+
+    const values = {};
+    let i = 0;
+
+    while (i < rows.length) {
+      const row = rows[i];
+      const labels = row.map(canonical);
+
+      if (row.length === 1 && SECTION_SET.has(labels[0])) {
+        i += 1;
+        continue;
+      }
+
+      const isLabelRow = labels.length > 0 && labels.every(label => FIELD_SET.has(label));
+      if (!isLabelRow) {
+        i += 1;
+        continue;
+      }
+
+      if (row.length > 1) {
+        let j = i + 1;
+        while (j < rows.length && isNoiseCells(rows[j])) j += 1;
+        if (j < rows.length) {
+          const next = rows[j];
+          const nextLabels = next.map(canonical);
+          const nextIsLabels = nextLabels.length > 0 && nextLabels.every(label => FIELD_SET.has(label) || SECTION_SET.has(label));
+
+          if (!nextIsLabels) {
+            labels.forEach((label,index) => {
+              if (values[label]) return;
+              values[label] = emptyToBlank(next[index] || '');
+            });
+            i = j + 1;
+            continue;
+          }
+        }
+      } else {
+        const label = labels[0];
+        const collected = [];
+        let j = i + 1;
+
+        while (j < rows.length) {
+          const next = rows[j];
+          if (isNoiseCells(next)) {
+            j += 1;
+            continue;
+          }
+
+          const nextLabels = next.map(canonical);
+          const hitsSection = next.length === 1 && SECTION_SET.has(nextLabels[0]);
+          const hitsLabelRow = nextLabels.length > 0 && nextLabels.every(item => FIELD_SET.has(item));
+          if (hitsSection || hitsLabelRow) break;
+
+          collected.push(next.join(' '));
+          j += 1;
+        }
+
+        if (!values[label]) values[label] = emptyToBlank(collected.join('\n'));
+        i = j;
+        continue;
+      }
+
+      i += 1;
+    }
+
+    return values;
   }
 
   function stripNoise(value) {
     return normalizeSpace(value)
       .replace(/https?:\/\/jncostech\.com\/admin\/?\s*\d+\/\d+/gi,' ')
-      .replace(/JN COS TECH Pvt\. Ltd\.\s*·\s*Generated from Admin Dashboard\s*·[^]*?(?=(CLAIMS \/ POSITIONING|PACKAGING & MARKET REQUIREMENTS|ADDITIONAL REQUIREMENTS|$))/gi,' ')
-      .replace(/\d{2}\.\s*\d{1,2}\.\s*\d{1,2}\.[^]{0,140}?JN COS TECH Request/gi,' ')
       .replace(/\b[12]\/2\b/g,' ')
       .replace(/\s{2,}/g,' ')
       .trim();
@@ -67,11 +156,6 @@
       .trim();
   }
 
-  function emptyToBlank(value) {
-    const v = normalizeSpace(value);
-    return (!v || v === '—' || v === '-') ? '' : v;
-  }
-
   function normalizeEnquiryType(serviceType) {
     const v = String(serviceType || '');
     if (/\bODM\b/i.test(v)) return 'ODM';
@@ -85,17 +169,16 @@
   }
 
   function parse(input) {
-    const text = stripNoise(input);
-    const looksStandard = /PROJECT REQUEST SUMMARY/i.test(text)
-      && /COMPANY \/ BRAND/i.test(text)
-      && /SERVICE TYPE/i.test(text);
-
-    const get = (label, occurrence = 0) => emptyToBlank(valueAfter(text,label,occurrence));
+    const structured = parseStructured(input);
+    const legacyText = stripNoise(input);
+    const get = label => emptyToBlank(structured[label] || valueAfter(legacyText,label));
 
     const serviceType = get('SERVICE TYPE');
+    const inquiryText = get('INQUIRY');
     const parsed = {
+      exportedAt: get('EXPORTED'),
       sourceDocumentId: get('DOCUMENT'),
-      sourceInquiryTitle: get('INQUIRY'),
+      sourceInquiryTitle: inquiryText.split(/\n/)[0] || inquiryText,
       sourceRequestType: get('TYPE'),
       sourceRequestStatus: get('STATUS'),
       company: get('COMPANY / BRAND'),
@@ -136,6 +219,10 @@
     parsed.source = 'Website Request PDF';
     parsed.status = 'New';
     parsed.warnings = [];
+
+    const looksStandard = /PROJECT REQUEST SUMMARY/i.test(input)
+      && /COMPANY \/ BRAND/i.test(input)
+      && /SERVICE TYPE/i.test(input);
 
     if (!looksStandard) parsed.warnings.push('This PDF does not match the standard JN COS TECH request format.');
     if (!parsed.company) parsed.warnings.push('Company / Brand was not detected.');
