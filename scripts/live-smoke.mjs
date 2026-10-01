@@ -49,7 +49,7 @@ async function attachDiagnostics(page, label) {
   await page.fill('#loginEmail', 'test@jncostech.com');
   await page.fill('#loginPassword', '1111');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/index\.html#dashboard$/, { timeout: 10000 });
+  await page.waitForURL(/index\.html(?:\?[^#]*)?#dashboard$/, { timeout: 10000 });
   assert((await page.locator('#sessionRole').innerText()).includes('Test Master'), 'Test session did not start in demo mode.');
 
   const navChecks = [
