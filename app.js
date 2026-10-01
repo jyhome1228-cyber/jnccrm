@@ -25,7 +25,6 @@
   let charts = [];
   let calendarCursor = new Date();
   let calendarEventCache = [];
-  let calendarEventCache = [];
 
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
@@ -50,10 +49,18 @@
   };
 
   function canAction(action, collection) {
-    if (action === 'project-tab' || action === 'logout') return true;
+    if (action === 'project-tab' || action === 'logout' || action === 'calendar-more') return true;
     if (action === 'delete-record' && collection) return CRMData.can(collection, 'delete');
     const requirement = actionPermissions[action];
     return !requirement || CRMData.can(requirement[0], requirement[1]);
+  }
+
+  function applyActionPermissions(root = document) {
+    root.querySelectorAll('[data-action]').forEach(el => {
+      const action = el.dataset.action || '';
+      const collection = el.dataset.collection || '';
+      el.classList.toggle('permission-hidden', !canAction(action, collection));
+    });
   }
 
   navItems.forEach(item => {
@@ -152,12 +159,7 @@
       closeModal();
       location.hash = target.replace(/^#/, '');
     }
-    if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
-    if (action === 'calendar-open-related') {
-      const target = button.dataset.target || '#calendar';
-      closeModal();
-      location.hash = target.replace(/^#/, '');
-    }
+    if (action === 'calendar-more') showCalendarDayEvents(button.dataset.date || '');
     if (action === 'new-user') openUserForm();
     if (action === 'edit-user') openUserForm(id);
     if (action === 'toggle-user') toggleUser(id);
@@ -179,11 +181,24 @@
   window.addEventListener('hashchange', renderRoute);
 
   document.addEventListener('keydown', e => {
-    if (e.key === '/' && document.activeElement !== searchInput) {
+    const active = document.activeElement;
+    const tag = active && active.tagName ? active.tagName : '';
+    const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(tag) || Boolean(active && active.isContentEditable);
+    if (e.key === '/' && !isTyping && active !== searchInput) {
       e.preventDefault();
       searchInput.focus();
     }
     if (e.key === 'Escape') closeModal();
+    if (e.key === 'Tab' && !modal.classList.contains('hidden')) {
+      const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(el => !el.classList.contains('hidden') && el.offsetParent !== null);
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
   });
 
   searchInput.addEventListener('keydown', e => {
@@ -211,6 +226,14 @@
     const d = new Date(value + (String(value).length === 10 ? 'T00:00:00' : ''));
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleDateString('en-CA');
+  }
+
+  function localDateKey(date = new Date()) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2,'0'),
+      String(date.getDate()).padStart(2,'0')
+    ].join('-');
   }
 
   function getCustomerName(id) {
@@ -246,15 +269,24 @@
     window.__crmToastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2200);
   }
 
+  let lastFocusedElement = null;
+
   function openModal(html) {
+    lastFocusedElement = document.activeElement;
     modalContent.innerHTML = html;
     modal.classList.remove('hidden');
+    applyActionPermissions(modalContent);
     lucide.createIcons();
+    const focusTarget = modalContent.querySelector('input, select, textarea, button, a[href]');
+    if (focusTarget) requestAnimationFrame(() => focusTarget.focus());
   }
 
   function closeModal() {
     modal.classList.add('hidden');
     modalContent.innerHTML = '';
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      requestAnimationFrame(() => lastFocusedElement.focus());
+    }
   }
 
   function modalForm(title, subtitle, fields, submitLabel, onSubmit) {
@@ -278,6 +310,14 @@
       if (submit) submit.disabled = true;
       try {
         await onSubmit(data);
+      } catch (error) {
+        let errorEl = e.currentTarget.querySelector('.form-error');
+        if (!errorEl) {
+          errorEl = document.createElement('p');
+          errorEl.className = 'form-error field-span';
+          e.currentTarget.querySelector('.form-grid')?.appendChild(errorEl);
+        }
+        errorEl.textContent = error && error.message ? error.message : String(error || 'Unable to save.');
       } finally {
         if (submit) submit.disabled = false;
       }
@@ -348,13 +388,14 @@
     else if (view === 'calendar') renderCalendar();
     else if (view === 'settings') renderSettings();
     else renderDashboard();
+    applyActionPermissions(pageRoot);
     lucide.createIcons();
     updateNotificationCount();
   }
 
   function updateNotificationCount() {
     const state = CRMData.getState();
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateKey();
     const dueLeads = state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).length;
     const waitingSamples = state.samples.filter(s => /Waiting|Revision/.test(s.status)).length;
     const count = dueLeads + waitingSamples;
@@ -365,7 +406,7 @@
 
   function renderNotifications() {
     const state = CRMData.getState();
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateKey();
     const items = [];
     state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).forEach(l => {
       items.push('<div class="notification-row"><i data-lucide="clock-alert"></i><div><strong>' + esc(l.company) + '</strong><p>Follow-up: ' + esc(l.nextAction || 'Next action') + ' · ' + esc(l.nextActionDate) + '</p></div></div>');
@@ -430,7 +471,7 @@ function getDashboardScope() {
 
   function renderDashboard() {
     const state = getDashboardScope();
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateKey();
     const isMaster = session.role === 'Admin';
     const isManagement = session.role === 'Management';
 
@@ -900,7 +941,7 @@ function renderProjectDetail(id) {
       selectField('Project','projectOption',selected,options,true) +
       inputField('Version','version',s.version || 'V1','text',true) +
       inputField('R&D Owner','rdOwner',s.rdOwner,'text',true) +
-      inputField('Created Date','createdDate',s.createdDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Created Date','createdDate',s.createdDate || localDateKey(),'date',true) +
       inputField('Quantity','quantity',s.quantity,'number',false) +
       selectField('Status','status',s.status || 'Preparing',['Preparing','Ready','Sent','Feedback Waiting','Revision','Approved','Rejected'],true) +
       inputField('Dispatch Date','dispatchDate',s.dispatchDate,'date',false) +
@@ -978,7 +1019,7 @@ function renderQuotations() {
       projectId:project.id,
       po:'',
       quantity:q.moq || '',
-      orderDate:new Date().toISOString().slice(0,10),
+      orderDate:localDateKey(),
       committedDate:'',
       paymentStatus:'Pending',
       total:'',
@@ -1013,7 +1054,7 @@ function renderOrders() {
       selectField('Project','projectOption',selected,options,true) +
       inputField('Customer PO','po',o.po,'text',false) +
       inputField('Quantity','quantity',o.quantity,'number',true) +
-      inputField('Order Date','orderDate',o.orderDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Order Date','orderDate',o.orderDate || localDateKey(),'date',true) +
       inputField('Committed Date','committedDate',o.committedDate,'date',false) +
       selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
       selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
@@ -1203,41 +1244,13 @@ function renderOperations() {
     if (close) close.addEventListener('click', closeModal);
   }
 
-  function showCalendarLinkedEvent(id) {
-    const event = calendarEventCache.find(e => e.id === id && e.system);
-    if (!event) {
-      toast('This linked schedule is no longer available.');
-      return;
-    }
-
-    const html =
-      '<div class="calendar-detail-modal">' +
-        '<div class="calendar-detail-top">' +
-          '<span class="calendar-detail-type">' + esc(event.type) + '</span>' +
-          '<span class="calendar-detail-date">' + esc(event.date) + (event.time ? ' · ' + esc(event.time) : '') + '</span>' +
-        '</div>' +
-        '<h2>' + esc(event.title) + '</h2>' +
-        '<p class="calendar-detail-description">' + esc(event.description || 'Review the related CRM record for this schedule.') + '</p>' +
-        '<div class="detail-grid compact calendar-detail-grid">' +
-          detailItem('Related', event.related || '—') +
-          detailItem('Record ID', event.recordId || '—') +
-        '</div>' +
-        '<div class="modal-actions">' +
-          '<button type="button" class="secondary-button" id="calendarDetailClose">Close</button>' +
-          '<button type="button" class="primary-button" data-action="calendar-open-related" data-target="' + esc(event.link || '#calendar') + '"><i data-lucide="arrow-up-right"></i> Open Related Record</button>' +
-        '</div>' +
-      '</div>';
-
-    openModal(html);
-    const close = document.getElementById('calendarDetailClose');
-    if (close) close.addEventListener('click', closeModal);
-  }
+  
 
   function openCalendarEventForm(id, presetDate) {
     const e = id ? CRMData.get('calendarEvents', id) : {};
     const fields =
       inputField('Title','title',e.title,'text',true,true) +
-      inputField('Date','date',e.date || presetDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Date','date',e.date || presetDate || localDateKey(),'date',true) +
       inputField('Time','time',e.time || '09:00','time',false) +
       selectField('Type','type',e.type || 'Meeting',['Meeting','Internal','Follow-up','Deadline','Production','Dispatch','Payment','Other'],true) +
       textAreaField('Notes','notes',e.notes,true);
@@ -1379,7 +1392,7 @@ function renderOperations() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jncos-crm-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    a.download = 'jncos-crm-backup-' + localDateKey() + '.json';
     document.body.appendChild(a);
     a.click();
     a.remove();
