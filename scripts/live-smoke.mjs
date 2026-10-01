@@ -5,6 +5,23 @@ import { chromium } from 'playwright';
 
 const base = process.env.CRM_BASE_URL || 'https://jyhome1228-cyber.github.io/jnccrm';
 const failures = [];
+
+// LIVE_V5_CHECK
+try {
+  const live = 'https://jyhome1228-cyber.github.io/jnccrm';
+  const stamp = Date.now();
+  const html = await fetch(live + '/index.html?qa=' + stamp, {cache:'no-store'}).then(r => r.text());
+  const app = await fetch(live + '/app.js?qa=' + stamp, {cache:'no-store'}).then(r => r.text());
+  const parser = await fetch(live + '/request-pdf-parser.js?qa=' + stamp, {cache:'no-store'}).then(r => r.text());
+  console.log('LIVE_V5_INDEX', html.includes('20261002-pdf5'));
+  console.log('LIVE_V5_APP', app.includes("parsed.importBuild = '20261002.5'"));
+  console.log('LIVE_V5_PARSER', parser.includes("legacyText = stripNoise(input).replace(/\\s+/g,' ').trim()"));
+  if (!html.includes('20261002-pdf5')) failures.push('Live site has not deployed PDF parser v5 yet.');
+  if (!app.includes("parsed.importBuild = '20261002.5'")) failures.push('Live app.js is not PDF import v5.');
+  if (!parser.includes("legacyText = stripNoise(input).replace(/\\s+/g,' ').trim()")) failures.push('Live parser raw fallback is missing.');
+} catch (error) {
+  failures.push('Live v5 check failed: ' + error.message);
+}
 const consoleErrors = [];
 const badResponses = [];
 
