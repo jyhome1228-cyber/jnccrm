@@ -1,10 +1,11 @@
 (() => {
   function resolveAdapter() {
-    const demoMode = sessionStorage.getItem('jnc-demo-mode') === '1';
-    if (demoMode && window.CRMStore) return window.CRMStore;
     const mode = (window.CRM_CONFIG && window.CRM_CONFIG.dataProvider) || 'local';
-    if (mode === 'firebase' && window.FirebaseCRMAdapter) return window.FirebaseCRMAdapter;
-    if (window.CRMStore) return window.CRMStore;
+    if (mode === 'firebase') {
+      if (window.FirebaseCRMAdapter) return window.FirebaseCRMAdapter;
+      throw new Error('Firebase CRM adapter is unavailable.');
+    }
+    if (mode === 'local' && window.CRMStore) return window.CRMStore;
     throw new Error('No CRM data adapter is available.');
   }
 
@@ -31,6 +32,6 @@
   window.CRMData = Object.assign({}, adapter, {
     ready,
     can,
-    providerName: (sessionStorage.getItem('jnc-demo-mode') === '1' ? 'demo' : ((window.CRM_CONFIG && window.CRM_CONFIG.dataProvider) || 'local'))
+    providerName: ((window.CRM_CONFIG && window.CRM_CONFIG.dataProvider) || 'local')
   });
 })();
