@@ -736,7 +736,7 @@ function getDashboardScope() {
       if ((fallback.confidence || 0) > (parsed.confidence || 0)) parsed = fallback;
     }
     parsed.sourceRequestFileName = file.name;
-    parsed.importBuild = '20261002.5';
+    parsed.importBuild = '20261002.6';
     parsed.extractedItemCount = extracted.itemCount;
     parsed.extractedPageCount = extracted.pages;
 
@@ -816,7 +816,7 @@ function getDashboardScope() {
 
     const html =
       '<p class="eyebrow">IMPORT PROJECT REQUEST</p>' +
-      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped · v5</strong></div>' +
+      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped · v6</strong></div>' +
       '<h2>Review detected request</h2>' +
       '<p class="modal-subtitle">The PDF has been mapped to CRM fields. Check the core information, then create the Lead.</p>' +
       warningHtml +
@@ -826,7 +826,7 @@ function getDashboardScope() {
           '<summary><span>Detected request details</span><small>Project · Formulation · Packaging</small></summary>' +
           '<div class="detail-grid compact import-preview-grid">' + requestImportDetailGrid(parsed) + '</div>' +
         '</details>' +
-        '<p class="helper-text import-helper">The PDF is read locally in your browser. Parser v5 · ' + esc(parsed.extractedItemCount || 0) + ' text items · ' + esc(parsed.extractedPageCount || 0) + ' pages. The PDF file itself is not uploaded.</p>' +
+        '<p class="helper-text import-helper">The PDF is read locally in your browser. Parser v6 · ' + esc(parsed.extractedItemCount || 0) + ' text items · ' + esc(parsed.extractedPageCount || 0) + ' pages. The PDF file itself is not uploaded.</p>' +
         '<div class="modal-actions">' +
           '<button type="button" class="secondary-button" id="cancelRequestImport">Cancel</button>' +
           '<button type="submit" class="primary-button"><i data-lucide="user-plus"></i> Create Lead</button>' +
