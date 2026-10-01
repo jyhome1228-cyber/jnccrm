@@ -37,13 +37,32 @@ async function attachDiagnostics(page, label) {
   assert(await page.locator('#loginPassword').isVisible(), 'Password input is not visible.');
   assert(await page.getByRole('button', { name: 'Sign in' }).isVisible(), 'Sign in button is not visible.');
   assert((await page.locator('body').innerText()).includes('INTERNAL WORKSPACE'), 'Login brand copy is missing.');
-  assert(!(await page.locator('body').innerText()).includes('Test login'), 'Test login copy is exposed in production.');
-  assert(!(await page.locator('body').innerText()).includes('1111'), 'Test password is exposed in production.');
+  assert((await page.locator('body').innerText()).includes('Test login'), 'Dedicated test login is missing.');
+  assert((await page.locator('body').innerText()).includes('test@jncostech.com / 1111'), 'Test login credentials are not shown as expected.');
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(overflow <= 1, `Desktop login has horizontal overflow: ${overflow}px`);
   await page.screenshot({ path: 'artifacts/login-desktop.png', fullPage: true });
 
+  await page.fill('#loginEmail', 'test@jncostech.com');
+  await page.fill('#loginPassword', '1111');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForURL(/index\.html#dashboard$/, { timeout: 10000 });
+  assert((await page.locator('#sessionRole').innerText()).includes('Test Master'), 'Test session did not start in demo mode.');
+
+  const navChecks = [
+    ['calendar','Calendar'],['dashboard','Dashboard'],['customers','Customers'],['leads','Leads'],
+    ['projects','Projects'],['samples','Samples'],['quotations','Quotations'],['orders','Orders'],
+    ['operations','Operations'],['settings','Settings']
+  ];
+  for (const [hash,label] of navChecks) {
+    await page.locator(`a.nav-item[data-view="${hash}"]`).click();
+    await page.waitForTimeout(120);
+    assert(page.url().includes('#' + hash), `${label} navigation failed.`);
+    assert((await page.locator('#pageRoot').innerText()).trim().length > 0, `${label} page rendered empty.`);
+  }
+
+  await page.goto(base + '/login.html', { waitUntil: 'networkidle', timeout: 30000 });
   await page.fill('#loginEmail', 'qa@example.com');
   await page.fill('#loginPassword', '1234');
   await page.getByRole('button', { name: 'Sign in' }).click();
