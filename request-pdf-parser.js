@@ -170,7 +170,7 @@
 
   function parse(input) {
     const structured = parseStructured(input);
-    const legacyText = stripNoise(input);
+    const legacyText = stripNoise(input).replace(/\s+/g,' ').trim();
     const get = label => emptyToBlank(structured[label] || valueAfter(legacyText,label));
 
     const serviceType = get('SERVICE TYPE');
