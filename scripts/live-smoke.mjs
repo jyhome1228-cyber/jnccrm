@@ -1,5 +1,4 @@
 // Live deployment smoke test
-// QA trigger: 2026-10-01
 import { chromium } from 'playwright';
 
 const base = process.env.CRM_BASE_URL || 'https://jyhome1228-cyber.github.io/jnccrm';
@@ -41,15 +40,20 @@ async function attachDiagnostics(page, label) {
   assert(!(await page.locator('body').innerText()).includes('Test login'), 'Test login copy is exposed in production.');
   assert(!(await page.locator('body').innerText()).includes('1111'), 'Test password is exposed in production.');
 
-  await page.fill('#loginEmail', 'qa@example.com');
-  await page.fill('#loginPassword', '1234');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  const errorText = await page.locator('#loginError').innerText();
-  assert(errorText.includes('Firebase password'), 'Short-password validation did not appear.');
-
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(overflow <= 1, `Desktop login has horizontal overflow: ${overflow}px`);
   await page.screenshot({ path: 'artifacts/login-desktop.png', fullPage: true });
+
+  await page.fill('#loginEmail', 'qa@example.com');
+  await page.fill('#loginPassword', '1234');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const validation = await page.locator('#loginPassword').evaluate(el => ({
+    valid: el.validity.valid,
+    tooShort: el.validity.tooShort,
+    message: el.validationMessage
+  }));
+  const customError = await page.locator('#loginError').innerText();
+  assert(validation.tooShort || customError.includes('Firebase password'), 'Short-password validation did not block submission.');
   await page.close();
 }
 
