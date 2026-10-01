@@ -44,6 +44,32 @@ jobs:
         run: |
           mkdir -p artifacts
           node scripts/live-smoke.mjs
+      - name: Verify live deployed PDF parser
+        if: github.event_name == 'push'
+        run: |
+          set -e
+          LIVE="https://jyhome1228-cyber.github.io/jnccrm"
+          OK=0
+          for i in $(seq 1 20); do
+            echo "Live deployment check attempt $i"
+            HTML=$(curl -fsSL "$LIVE/index.html?sha=${GITHUB_SHA}&attempt=$i" || true)
+            if echo "$HTML" | grep -q "request-pdf-parser.js?v=20261002-pdf3" && \
+               echo "$HTML" | grep -q "app.js?v=20261002-pdf3"; then
+              PARSER=$(curl -fsSL "$LIVE/request-pdf-parser.js?sha=${GITHUB_SHA}&attempt=$i" || true)
+              APP=$(curl -fsSL "$LIVE/app.js?sha=${GITHUB_SHA}&attempt=$i" || true)
+              if echo "$PARSER" | grep -q "function parseStructured" && \
+                 echo "$APP" | grep -q "async function extractRequestPdfText"; then
+                echo "LIVE_PDF_PARSER_OK"
+                OK=1
+                break
+              fi
+            fi
+            sleep 15
+          done
+          if [ "$OK" != "1" ]; then
+            echo "Live site is not serving the latest PDF parser assets."
+            exit 1
+          fi
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
