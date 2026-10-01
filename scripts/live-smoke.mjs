@@ -1,4 +1,5 @@
 // Live deployment smoke test
+// QA trigger: 2026-10-01
 import { chromium } from 'playwright';
 
 const base = process.env.CRM_BASE_URL || 'https://jyhome1228-cyber.github.io/jnccrm';
