@@ -5,6 +5,40 @@ import { chromium } from 'playwright';
 
 const base = process.env.CRM_BASE_URL || 'https://jyhome1228-cyber.github.io/jnccrm';
 const failures = [];
+
+// LIVE_DEPLOYMENT_ASSET_CHECK
+try {
+  const liveBase = 'https://jyhome1228-cyber.github.io/jnccrm';
+  const stamp = Date.now();
+  const liveHtml = await fetch(liveBase + '/index.html?qa=' + stamp, {cache:'no-store'}).then(r => {
+    if (!r.ok) throw new Error('index HTTP ' + r.status);
+    return r.text();
+  });
+  const liveParser = await fetch(liveBase + '/request-pdf-parser.js?qa=' + stamp, {cache:'no-store'}).then(r => {
+    if (!r.ok) throw new Error('parser HTTP ' + r.status);
+    return r.text();
+  });
+  const liveApp = await fetch(liveBase + '/app.js?qa=' + stamp, {cache:'no-store'}).then(r => {
+    if (!r.ok) throw new Error('app HTTP ' + r.status);
+    return r.text();
+  });
+
+  console.log('LIVE_INDEX_HAS_PDF3', liveHtml.includes('request-pdf-parser.js?v=20261002-pdf3'));
+  console.log('LIVE_PARSER_HAS_STRUCTURED', liveParser.includes('function parseStructured'));
+  console.log('LIVE_APP_HAS_POSITIONAL_EXTRACTOR', liveApp.includes('async function extractRequestPdfText'));
+
+  if (!liveHtml.includes('request-pdf-parser.js?v=20261002-pdf3')) {
+    failures.push('Live index is not serving the latest PDF parser asset version.');
+  }
+  if (!liveParser.includes('function parseStructured')) {
+    failures.push('Live request-pdf-parser.js is stale.');
+  }
+  if (!liveApp.includes('async function extractRequestPdfText')) {
+    failures.push('Live app.js is stale.');
+  }
+} catch (error) {
+  failures.push('Live deployment asset check failed: ' + error.message);
+}
 const consoleErrors = [];
 const badResponses = [];
 
