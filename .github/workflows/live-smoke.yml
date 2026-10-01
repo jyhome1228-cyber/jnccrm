@@ -53,8 +53,8 @@ jobs:
           for i in $(seq 1 20); do
             echo "Live deployment check attempt $i"
             HTML=$(curl -fsSL "$LIVE/index.html?sha=${GITHUB_SHA}&attempt=$i" || true)
-            if echo "$HTML" | grep -q "request-pdf-parser.js?v=20261002-pdf3" && \
-               echo "$HTML" | grep -q "app.js?v=20261002-pdf3"; then
+            if echo "$HTML" | grep -q "request-pdf-parser.js?v=20261002-pdf4" && \
+               echo "$HTML" | grep -q "app.js?v=20261002-pdf4"; then
               PARSER=$(curl -fsSL "$LIVE/request-pdf-parser.js?sha=${GITHUB_SHA}&attempt=$i" || true)
               APP=$(curl -fsSL "$LIVE/app.js?sha=${GITHUB_SHA}&attempt=$i" || true)
               if echo "$PARSER" | grep -q "function parseStructured" && \
