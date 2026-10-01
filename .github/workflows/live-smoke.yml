@@ -12,6 +12,7 @@ on:
       - 'app-config.js'
       - 'data-provider.js'
       - 'firebase-adapter.js'
+      - 'request-pdf-parser.js'
       - 'scripts/live-smoke.mjs'
       - '.github/workflows/live-smoke.yml'
 
