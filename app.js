@@ -637,53 +637,69 @@ function getDashboardScope() {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const pdf = await window.pdfjsLib.getDocument({data:bytes}).promise;
     const pageBlocks = [];
+    const rawBlocks = [];
+    let itemCount = 0;
 
     for (let pageNumber=1; pageNumber<=pdf.numPages; pageNumber++) {
       const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({scale:1});
       const content = await page.getTextContent({normalizeWhitespace:true});
+      itemCount += content.items.length;
+
+      rawBlocks.push(content.items
+        .map(item => String(item.str || '').replace(/\s+/g,' ').trim())
+        .filter(Boolean)
+        .join('\n'));
 
       const items = content.items
-        .map((item,index) => ({
-          text:String(item.str || '').replace(/\s+/g,' ').trim(),
-          x:Number(item.transform && item.transform[4]) || 0,
-          y:Number(item.transform && item.transform[5]) || 0,
-          index
-        }))
+        .map((item,index) => {
+          const tx = item.transform || [1,0,0,1,0,0];
+          const point = viewport.convertToViewportPoint(Number(tx[4]) || 0, Number(tx[5]) || 0);
+          const width = Math.abs(Number(item.width) || 0) * (viewport.scale || 1);
+          return {
+            text:String(item.str || '').replace(/\s+/g,' ').trim(),
+            x:Number(point[0]) || 0,
+            y:Number(point[1]) || 0,
+            width,
+            endX:(Number(point[0]) || 0) + width,
+            index
+          };
+        })
         .filter(item => item.text);
 
-      const rows = [];
       const sorted = items.slice().sort((a,b) => {
-        if (Math.abs(a.y - b.y) > 2.5) return b.y - a.y;
+        if (Math.abs(a.y - b.y) > 3.5) return a.y - b.y;
         if (Math.abs(a.x - b.x) > 1) return a.x - b.x;
         return a.index - b.index;
       });
 
+      const rows = [];
       for (const item of sorted) {
-        let row = rows.find(r => Math.abs(r.y - item.y) <= 2.5);
+        let row = rows.find(r => Math.abs(r.y - item.y) <= 3.5);
         if (!row) {
           row = {y:item.y,items:[]};
           rows.push(row);
         }
         row.items.push(item);
       }
-
-      rows.sort((a,b) => b.y - a.y);
+      rows.sort((a,b) => a.y - b.y);
 
       const lines = rows.map(row => {
         const rowItems = row.items.sort((a,b) => a.x - b.x || a.index - b.index);
         const cells = [];
         let current = '';
-        let previousX = null;
+        let previousEndX = null;
 
         rowItems.forEach(item => {
-          const startsNewCell = current && previousX != null && (item.x - previousX) > 90;
+          const gap = previousEndX == null ? 0 : item.x - previousEndX;
+          const startsNewCell = Boolean(current) && gap > 24;
           if (startsNewCell) {
             cells.push(current.trim());
             current = item.text;
           } else {
             current = (current ? current + ' ' : '') + item.text;
           }
-          previousX = item.x;
+          previousEndX = Math.max(item.endX, item.x + Math.max(item.width, item.text.length * 2.5));
         });
 
         if (current.trim()) cells.push(current.trim());
@@ -693,7 +709,12 @@ function getDashboardScope() {
       pageBlocks.push(lines.join('\n'));
     }
 
-    return pageBlocks.join('\n');
+    return {
+      structured:pageBlocks.join('\n'),
+      raw:rawBlocks.join('\n'),
+      itemCount,
+      pages:pdf.numPages
+    };
   }
 
   async function importRequestPdf(file) {
@@ -708,9 +729,16 @@ function getDashboardScope() {
       '<p>Extracting company, project, formulation and packaging information.</p></div>'
     );
 
-    const text = await extractRequestPdfText(file);
-    const parsed = window.JNCRequestParser.parse(text);
+    const extracted = await extractRequestPdfText(file);
+    let parsed = window.JNCRequestParser.parse(extracted.structured);
+    if ((parsed.confidence || 0) <= 20) {
+      const fallback = window.JNCRequestParser.parse(extracted.raw);
+      if ((fallback.confidence || 0) > (parsed.confidence || 0)) parsed = fallback;
+    }
     parsed.sourceRequestFileName = file.name;
+    parsed.importBuild = '20261002.4';
+    parsed.extractedItemCount = extracted.itemCount;
+    parsed.extractedPageCount = extracted.pages;
 
     const existing = parsed.sourceDocumentId
       ? CRMData.list('leads').find(l => String(l.sourceDocumentId || '') === String(parsed.sourceDocumentId))
@@ -788,7 +816,7 @@ function getDashboardScope() {
 
     const html =
       '<p class="eyebrow">IMPORT PROJECT REQUEST</p>' +
-      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped</strong></div>' +
+      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped · v4</strong></div>' +
       '<h2>Review detected request</h2>' +
       '<p class="modal-subtitle">The PDF has been mapped to CRM fields. Check the core information, then create the Lead.</p>' +
       warningHtml +
@@ -798,7 +826,7 @@ function getDashboardScope() {
           '<summary><span>Detected request details</span><small>Project · Formulation · Packaging</small></summary>' +
           '<div class="detail-grid compact import-preview-grid">' + requestImportDetailGrid(parsed) + '</div>' +
         '</details>' +
-        '<p class="helper-text import-helper">The PDF is read locally in your browser. This step stores the extracted CRM data and source file name; the PDF file itself is not uploaded.</p>' +
+        '<p class="helper-text import-helper">The PDF is read locally in your browser. Parser v4 · ' + esc(parsed.extractedItemCount || 0) + ' text items · ' + esc(parsed.extractedPageCount || 0) + ' pages. The PDF file itself is not uploaded.</p>' +
         '<div class="modal-actions">' +
           '<button type="button" class="secondary-button" id="cancelRequestImport">Cancel</button>' +
           '<button type="submit" class="primary-button"><i data-lucide="user-plus"></i> Create Lead</button>' +
