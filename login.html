@@ -97,7 +97,7 @@
       try {
         await CRMData.ready();
         if (CRMData.getSession()) {
-          location.replace('./index.html#dashboard');
+          location.replace('./index.html?v=20261002-pdf3#dashboard');
           return;
         }
       } catch (e) {
@@ -121,7 +121,7 @@
             sessionStorage.setItem('jnc-demo-mode','1');
             CRMStore.setSession('test@jncostech.com');
             sessionStorage.removeItem('jnc-login-email');
-            location.assign('./index.html#dashboard');
+            location.assign('./index.html?v=20261002-pdf3#dashboard');
             return;
           } catch (err) {
             sessionStorage.removeItem('jnc-demo-mode');
@@ -144,7 +144,7 @@
           const signedIn = await CRMData.signIn(email, password);
           if (!signedIn || !signedIn.uid) throw new Error('CRM session could not be created.');
           sessionStorage.removeItem('jnc-login-email');
-          location.assign('./index.html#dashboard');
+          location.assign('./index.html?v=20261002-pdf3#dashboard');
         } catch (err) {
           console.error('Login error:', err);
           const code = err && err.code ? err.code : '';
