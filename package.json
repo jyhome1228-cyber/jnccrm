@@ -3,6 +3,6 @@
   "private": true,
   "version": "0.2.0",
   "scripts": {
-    "validate": "node --check app.js && node --check crm-store.js && node --check app-config.js && node --check data-provider.js && node --check firebase-adapter.js && node scripts/validate-config.mjs"
+    "validate": "node --check app.js && node --check crm-store.js && node --check app-config.js && node --check data-provider.js && node --check firebase-adapter.js && node --check request-pdf-parser.js && node scripts/test-request-parser.mjs && node scripts/validate-config.mjs"
   }
 }
