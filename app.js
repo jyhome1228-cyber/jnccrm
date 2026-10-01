@@ -29,9 +29,9 @@
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
   document.getElementById('sessionRole').textContent =
-    session.email === 'test@jncostech.com'
-      ? 'Test Master · Demo'
-      : (session.role === 'Admin' ? 'Master Account' : ((session.department || 'General') + ' · ' + (session.role || 'Staff')));
+    session.role === 'Admin'
+      ? 'Master Account'
+      : ((session.department || 'General') + ' · ' + (session.role || 'Staff'));
   document.getElementById('sessionAvatar').textContent = initials(session.name || 'JN COS');
 
   const actionPermissions = {
@@ -45,7 +45,7 @@
     'edit-project-artwork':['projects','edit'], 'edit-project-approval':['projects','approve'], 'edit-project-documents':['projects','edit'],
     'new-user':['users','manage'], 'edit-user':['users','manage'], 'toggle-user':['users','manage'],
     'new-calendar-event':['calendar','view'], 'edit-calendar-event':['calendar','view'], 'delete-calendar-event':['calendar','view'],
-    'export-data':['settings','view'], 'import-data':['settings','manage'], 'reset-data':['settings','manage']
+    'export-data':['settings','view']
   };
 
   function canAction(action, collection) {
@@ -66,22 +66,6 @@
   navItems.forEach(item => {
     const resource = item.dataset.view;
     if (!CRMData.can(resource, 'view')) item.classList.add('permission-hidden');
-  });
-
-  const dataImportInput = document.getElementById('dataImportInput');
-  dataImportInput.addEventListener('change', async () => {
-    const file = dataImportInput.files && dataImportInput.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      CRMData.importData(text);
-      toast('CRM backup imported.');
-      dataImportInput.value = '';
-      renderRoute();
-    } catch (error) {
-      dataImportInput.value = '';
-      openModal('<p class="eyebrow">IMPORT ERROR</p><h2>Backup could not be imported</h2><p class="modal-subtitle">' + esc(error.message || error) + '</p>');
-    }
   });
 
   menuButton.addEventListener('click', () => sidebar.classList.toggle('open'));
@@ -117,7 +101,6 @@
 
     if (action === 'logout') {
       await CRMData.logout();
-      sessionStorage.removeItem('jnc-demo-mode');
       location.replace('./login.html');
       return;
     }
@@ -164,14 +147,6 @@
     if (action === 'edit-user') openUserForm(id);
     if (action === 'toggle-user') await toggleUser(id);
     if (action === 'export-data') exportCRMData();
-    if (action === 'import-data') dataImportInput.click();
-    if (action === 'reset-data') {
-      if (confirm('Reset all local CRM demo data?')) {
-        CRMData.reset();
-        toast('Demo data reset.');
-        renderRoute();
-      }
-    }
   });
 
   navItems.forEach(item => {
@@ -760,7 +735,7 @@ function renderProjectDetail(id) {
 
     pageRoot.innerHTML =
       '<div class="detail-header"><div><a class="back-link" href="#projects"><i data-lucide="arrow-left"></i> Projects</a><p class="eyebrow">OEM / ODM PROJECT</p><h1>' + esc(p.name) + '</h1><p>' + esc(p.id) + ' · ' + esc(getCustomerName(p.customerId)) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-project" data-id="' + esc(p.id) + '">Edit Project</button><button class="primary-button" data-action="new-sample" data-project-id="' + esc(p.id) + '"><i data-lucide="plus"></i> Add Sample</button></div></div>' +
-      '<div class="project-status-bar"><div><span>Project Status</span>' + badge(p.status) + '</div><div><span>Formula</span>' + badge(p.formulaStatus) + '</div><div><span>Packaging</span>' + badge(p.packagingStatus) + '</div><div><span>Artwork</span>' + badge(p.artworkStatus) + '</div><div><span>Approval</span>' + badge(p.approvalStatus) + '</div></div>' +
+      '<div class="project-status-bar"><div><span>Project Status</span>' + badge(p.status) + '</div><div><span>Formula</span>' + badge(p.formulaStatus || 'Not Started') + '</div><div><span>Packaging</span>' + badge(p.packagingStatus) + '</div><div><span>Artwork</span>' + badge(p.artworkStatus) + '</div><div><span>Approval</span>' + badge(p.approvalStatus) + '</div></div>' +
       '<div class="project-tabs" id="projectTabs">' +
         projectTabButton('overview','Overview',true) +
         projectTabButton('brief','Product Brief') +
