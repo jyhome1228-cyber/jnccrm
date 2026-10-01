@@ -48,12 +48,16 @@
           <strong>Master account</strong>
           <span>admin@jncostech.com</span>
         </div>
+        <div class="master-login-note" style="margin-top:-12px">
+          <strong>Test login</strong>
+          <span>test@jncostech.com / 1111</span>
+        </div>
 
         <label>Email
           <input id="loginEmail" type="email" placeholder="admin@jncostech.com" required autocomplete="username" autofocus />
         </label>
         <label>Password
-          <input id="loginPassword" type="password" placeholder="Enter your password" required minlength="6" autocomplete="current-password" />
+          <input id="loginPassword" type="password" placeholder="Enter your password" required minlength="4" autocomplete="current-password" />
         </label>
 
         <div class="login-row login-row-end">
@@ -108,6 +112,20 @@
         sessionStorage.setItem('jnc-login-email', email);
 
         error.classList.add('hidden');
+
+        if (email.toLowerCase() === 'test@jncostech.com' && password === '1111') {
+          try {
+            sessionStorage.setItem('jnc-demo-mode','1');
+            CRMStore.setSession('test@jncostech.com');
+            sessionStorage.removeItem('jnc-login-email');
+            location.assign('./index.html#dashboard');
+            return;
+          } catch (err) {
+            sessionStorage.removeItem('jnc-demo-mode');
+            showError(err.message || 'Unable to start test mode.');
+            return;
+          }
+        }
 
         if (!email || password.length < 6) {
           showError('Please enter your email and Firebase password.');
