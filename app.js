@@ -25,14 +25,13 @@
   let charts = [];
   let calendarCursor = new Date();
   let calendarEventCache = [];
-  let calendarEventCache = [];
 
 
   document.getElementById('sessionName').textContent = session.name || 'JN COS User';
   document.getElementById('sessionRole').textContent =
-    session.email === 'test@jncostech.com'
-      ? 'Test Master · Demo'
-      : (session.role === 'Admin' ? 'Master Account' : ((session.department || 'General') + ' · ' + (session.role || 'Staff')));
+    session.role === 'Admin'
+      ? 'Master Account'
+      : ((session.department || 'General') + ' · ' + (session.role || 'Staff'));
   document.getElementById('sessionAvatar').textContent = initials(session.name || 'JN COS');
 
   const actionPermissions = {
@@ -46,35 +45,27 @@
     'edit-project-artwork':['projects','edit'], 'edit-project-approval':['projects','approve'], 'edit-project-documents':['projects','edit'],
     'new-user':['users','manage'], 'edit-user':['users','manage'], 'toggle-user':['users','manage'],
     'new-calendar-event':['calendar','view'], 'edit-calendar-event':['calendar','view'], 'delete-calendar-event':['calendar','view'],
-    'export-data':['settings','view'], 'import-data':['settings','manage'], 'reset-data':['settings','manage']
+    'export-data':['settings','view']
   };
 
   function canAction(action, collection) {
-    if (action === 'project-tab' || action === 'logout') return true;
+    if (action === 'project-tab' || action === 'logout' || action === 'calendar-more') return true;
     if (action === 'delete-record' && collection) return CRMData.can(collection, 'delete');
     const requirement = actionPermissions[action];
     return !requirement || CRMData.can(requirement[0], requirement[1]);
   }
 
+  function applyActionPermissions(root = document) {
+    root.querySelectorAll('[data-action]').forEach(el => {
+      const action = el.dataset.action || '';
+      const collection = el.dataset.collection || '';
+      el.classList.toggle('permission-hidden', !canAction(action, collection));
+    });
+  }
+
   navItems.forEach(item => {
     const resource = item.dataset.view;
     if (!CRMData.can(resource, 'view')) item.classList.add('permission-hidden');
-  });
-
-  const dataImportInput = document.getElementById('dataImportInput');
-  dataImportInput.addEventListener('change', async () => {
-    const file = dataImportInput.files && dataImportInput.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      CRMData.importData(text);
-      toast('CRM backup imported.');
-      dataImportInput.value = '';
-      renderRoute();
-    } catch (error) {
-      dataImportInput.value = '';
-      openModal('<p class="eyebrow">IMPORT ERROR</p><h2>Backup could not be imported</h2><p class="modal-subtitle">' + esc(error.message || error) + '</p>');
-    }
   });
 
   menuButton.addEventListener('click', () => sidebar.classList.toggle('open'));
@@ -110,26 +101,25 @@
 
     if (action === 'logout') {
       await CRMData.logout();
-      sessionStorage.removeItem('jnc-demo-mode');
       location.replace('./login.html');
       return;
     }
     if (action === 'new-customer') openCustomerForm();
     if (action === 'edit-customer') openCustomerForm(id);
-    if (action === 'delete-customer') deleteRecord('customers', id, 'customer');
+    if (action === 'delete-customer') await deleteRecord('customers', id, 'customer');
     if (action === 'new-lead') openLeadForm();
     if (action === 'edit-lead') openLeadForm(id);
-    if (action === 'delete-lead') deleteRecord('leads', id, 'lead');
-    if (action === 'lead-to-project') convertLeadToProject(id);
-    if (action === 'new-project') openProjectForm();
+    if (action === 'delete-lead') await deleteRecord('leads', id, 'lead');
+    if (action === 'lead-to-project') await convertLeadToProject(id);
+    if (action === 'new-project') openProjectForm('', button.dataset.customerId ? {customerId:button.dataset.customerId} : undefined);
     if (action === 'edit-project') openProjectForm(id);
-    if (action === 'delete-project') deleteRecord('projects', id, 'project');
+    if (action === 'delete-project') await deleteRecord('projects', id, 'project');
     if (action === 'new-sample') openSampleForm(button.dataset.projectId || '');
     if (action === 'edit-sample') openSampleForm('', id);
-    if (action === 'delete-record' && collection) deleteRecord(collection, id, collection.slice(0,-1));
+    if (action === 'delete-record' && collection) await deleteRecord(collection, id, collection.slice(0,-1));
     if (action === 'new-quotation') openQuotationForm(button.dataset.projectId || '');
     if (action === 'edit-quotation') openQuotationForm('', id);
-    if (action === 'convert-quotation') convertQuotationToOrder(id);
+    if (action === 'convert-quotation') await convertQuotationToOrder(id);
     if (action === 'new-order') openOrderForm();
     if (action === 'edit-order') openOrderForm('', id);
     if (action === 'edit-operation') openOrderForm('', id, 'operations');
@@ -145,31 +135,18 @@
     if (action === 'calendar-today') { calendarCursor = new Date(); renderCalendar(); }
     if (action === 'new-calendar-event') openCalendarEventForm('', button.dataset.date || '');
     if (action === 'edit-calendar-event') openCalendarEventForm(id);
-    if (action === 'delete-calendar-event') deleteCalendarEvent(id);
+    if (action === 'delete-calendar-event') await deleteCalendarEvent(id);
     if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
     if (action === 'calendar-open-related') {
       const target = button.dataset.target || '#calendar';
       closeModal();
       location.hash = target.replace(/^#/, '');
     }
-    if (action === 'calendar-linked-event') showCalendarLinkedEvent(id);
-    if (action === 'calendar-open-related') {
-      const target = button.dataset.target || '#calendar';
-      closeModal();
-      location.hash = target.replace(/^#/, '');
-    }
+    if (action === 'calendar-more') showCalendarDayEvents(button.dataset.date || '');
     if (action === 'new-user') openUserForm();
     if (action === 'edit-user') openUserForm(id);
-    if (action === 'toggle-user') toggleUser(id);
+    if (action === 'toggle-user') await toggleUser(id);
     if (action === 'export-data') exportCRMData();
-    if (action === 'import-data') dataImportInput.click();
-    if (action === 'reset-data') {
-      if (confirm('Reset all local CRM demo data?')) {
-        CRMData.reset();
-        toast('Demo data reset.');
-        renderRoute();
-      }
-    }
   });
 
   navItems.forEach(item => {
@@ -179,11 +156,24 @@
   window.addEventListener('hashchange', renderRoute);
 
   document.addEventListener('keydown', e => {
-    if (e.key === '/' && document.activeElement !== searchInput) {
+    const active = document.activeElement;
+    const tag = active && active.tagName ? active.tagName : '';
+    const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(tag) || Boolean(active && active.isContentEditable);
+    if (e.key === '/' && !isTyping && active !== searchInput) {
       e.preventDefault();
       searchInput.focus();
     }
     if (e.key === 'Escape') closeModal();
+    if (e.key === 'Tab' && !modal.classList.contains('hidden')) {
+      const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(el => !el.classList.contains('hidden') && el.offsetParent !== null);
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
   });
 
   searchInput.addEventListener('keydown', e => {
@@ -211,6 +201,14 @@
     const d = new Date(value + (String(value).length === 10 ? 'T00:00:00' : ''));
     if (Number.isNaN(d.getTime())) return value;
     return d.toLocaleDateString('en-CA');
+  }
+
+  function localDateKey(date = new Date()) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2,'0'),
+      String(date.getDate()).padStart(2,'0')
+    ].join('-');
   }
 
   function getCustomerName(id) {
@@ -246,15 +244,24 @@
     window.__crmToastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2200);
   }
 
+  let lastFocusedElement = null;
+
   function openModal(html) {
+    lastFocusedElement = document.activeElement;
     modalContent.innerHTML = html;
     modal.classList.remove('hidden');
+    applyActionPermissions(modalContent);
     lucide.createIcons();
+    const focusTarget = modalContent.querySelector('input, select, textarea, button, a[href]');
+    if (focusTarget) requestAnimationFrame(() => focusTarget.focus());
   }
 
   function closeModal() {
     modal.classList.add('hidden');
     modalContent.innerHTML = '';
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      requestAnimationFrame(() => lastFocusedElement.focus());
+    }
   }
 
   function modalForm(title, subtitle, fields, submitLabel, onSubmit) {
@@ -278,6 +285,14 @@
       if (submit) submit.disabled = true;
       try {
         await onSubmit(data);
+      } catch (error) {
+        let errorEl = e.currentTarget.querySelector('.form-error');
+        if (!errorEl) {
+          errorEl = document.createElement('p');
+          errorEl.className = 'form-error field-span';
+          e.currentTarget.querySelector('.form-grid')?.appendChild(errorEl);
+        }
+        errorEl.textContent = error && error.message ? error.message : String(error || 'Unable to save.');
       } finally {
         if (submit) submit.disabled = false;
       }
@@ -348,13 +363,14 @@
     else if (view === 'calendar') renderCalendar();
     else if (view === 'settings') renderSettings();
     else renderDashboard();
+    applyActionPermissions(pageRoot);
     lucide.createIcons();
     updateNotificationCount();
   }
 
   function updateNotificationCount() {
     const state = CRMData.getState();
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateKey();
     const dueLeads = state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).length;
     const waitingSamples = state.samples.filter(s => /Waiting|Revision/.test(s.status)).length;
     const count = dueLeads + waitingSamples;
@@ -365,7 +381,7 @@
 
   function renderNotifications() {
     const state = CRMData.getState();
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateKey();
     const items = [];
     state.leads.filter(l => l.nextActionDate && l.nextActionDate <= today && !/Won|Lost/.test(l.status)).forEach(l => {
       items.push('<div class="notification-row"><i data-lucide="clock-alert"></i><div><strong>' + esc(l.company) + '</strong><p>Follow-up: ' + esc(l.nextAction || 'Next action') + ' · ' + esc(l.nextActionDate) + '</p></div></div>');
@@ -430,7 +446,7 @@ function getDashboardScope() {
 
   function renderDashboard() {
     const state = getDashboardScope();
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateKey();
     const isMaster = session.role === 'Admin';
     const isManagement = session.role === 'Management';
 
@@ -559,7 +575,7 @@ function getDashboardScope() {
     const quotes = CRMData.list('quotations').filter(q => projectIds.includes(q.projectId));
 
     pageRoot.innerHTML =
-      '<div class="detail-header"><div><a class="back-link" href="#customers"><i data-lucide="arrow-left"></i> Customers</a><p class="eyebrow">CUSTOMER 360°</p><h1>' + esc(c.company) + '</h1><p>' + esc(c.country) + ' · ' + esc(c.type) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-customer" data-id="' + esc(c.id) + '">Edit</button><button class="primary-button" data-action="new-project"><i data-lucide="plus"></i> New Project</button></div></div>' +
+      '<div class="detail-header"><div><a class="back-link" href="#customers"><i data-lucide="arrow-left"></i> Customers</a><p class="eyebrow">CUSTOMER 360°</p><h1>' + esc(c.company) + '</h1><p>' + esc(c.country) + ' · ' + esc(c.type) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-customer" data-id="' + esc(c.id) + '">Edit</button><button class="primary-button" data-action="new-project" data-customer-id="' + esc(c.id) + '"><i data-lucide="plus"></i> New Project</button></div></div>' +
       '<div class="detail-grid">' +
         detailItem('Customer ID',c.id) + detailItem('Status',c.status) + detailItem('Sales Owner',c.owner) + detailItem('Payment Terms',c.paymentTerms) +
         detailItem('Main Contact',c.contact) + detailItem('Email',c.email) + detailItem('Phone',c.phone) + detailItem('Country',c.country) +
@@ -584,8 +600,8 @@ function getDashboardScope() {
       inputField('Sales Owner','owner',c.owner || session.name,'text',true) +
       inputField('Payment Terms','paymentTerms',c.paymentTerms,'text',false,true) +
       textAreaField('Internal Notes','notes',c.notes,true);
-    modalForm(id ? 'Edit Customer' : 'New Customer','Customer company and account information.',fields,id ? 'Save Changes' : 'Create Customer',data => {
-      id ? CRMData.update('customers', id, data) : CRMData.create('customers', data);
+    modalForm(id ? 'Edit Customer' : 'New Customer','Customer company and account information.',fields,id ? 'Save Changes' : 'Create Customer',async data => {
+      id ? await CRMData.update('customers', id, data) : await CRMData.create('customers', data);
       closeModal(); toast(id ? 'Customer updated.' : 'Customer created.'); renderRoute();
     });
   }
@@ -616,23 +632,36 @@ function getDashboardScope() {
       inputField('Next Action Date','nextActionDate',l.nextActionDate,'date',false) +
       inputField('Next Action','nextAction',l.nextAction,'text',false,true) +
       textAreaField('Enquiry Details','details',l.details,true);
-    modalForm(id ? 'Edit Lead' : 'New Lead','Record the enquiry and always assign a next action.',fields,id ? 'Save Changes' : 'Create Lead',data => {
-      id ? CRMData.update('leads', id, data) : CRMData.create('leads', data);
+    modalForm(id ? 'Edit Lead' : 'New Lead','Record the enquiry and always assign a next action.',fields,id ? 'Save Changes' : 'Create Lead',async data => {
+      id ? await CRMData.update('leads', id, data) : await CRMData.create('leads', data);
       closeModal(); toast(id ? 'Lead updated.' : 'Lead created.'); renderRoute();
     });
   }
 
-  function convertLeadToProject(id) {
+  async function convertLeadToProject(id) {
     const lead = CRMData.get('leads', id);
     if (!lead) return;
-    let customer = CRMData.list('customers').find(c => c.company.toLowerCase() === lead.company.toLowerCase());
+    if (/Won|Lost/.test(lead.status || '')) {
+      toast('Closed leads cannot be converted to a new project.');
+      return;
+    }
+    const existingProject = CRMData.list('projects').find(p => p.sourceLeadId === id);
+    if (existingProject) {
+      toast('This lead is already linked to ' + existingProject.id + '.');
+      location.hash = '#projects/' + existingProject.id;
+      return;
+    }
+    let customer = CRMData.list('customers').find(c => String(c.company || '').toLowerCase() === String(lead.company || '').toLowerCase());
     if (!customer) {
-      customer = CRMData.create('customers', {
-        company:lead.company, country:lead.country, type:lead.type, contact:lead.contact, email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active', paymentTerms:'TBD', notes:'Created from ' + lead.id
+      customer = await CRMData.create('customers', {
+        company:lead.company, country:lead.country, type:lead.type, contact:lead.contact,
+        email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active',
+        paymentTerms:'TBD', notes:'Created from ' + lead.id
       });
     }
-    const project = CRMData.create('projects', {
+    const project = await CRMData.create('projects', {
       customerId:customer.id,
+      sourceLeadId:id,
       name:lead.company + ' New Product',
       category:'',
       salesOwner:lead.owner,
@@ -647,7 +676,7 @@ function getDashboardScope() {
       artworkStatus:'Not Started',
       approvalStatus:'Pending'
     });
-    CRMData.update('leads', id, {status:'Development'});
+    await CRMData.update('leads', id, {status:'Development'});
     toast('Project ' + project.id + ' created from lead.');
     location.hash = '#projects/' + project.id;
   }
@@ -679,14 +708,14 @@ function getDashboardScope() {
       inputField('MOQ','moq',p.moq,'text',false) +
       inputField('Target Price','targetPrice',p.targetPrice,'text',false) +
       textAreaField('Product Brief','brief',p.brief,true);
-    modalForm(id ? 'Edit Project' : 'New Project','Create one OEM / ODM project per product or variant.',fields,id ? 'Save Changes' : 'Create Project',data => {
+    modalForm(id ? 'Edit Project' : 'New Project','Create one OEM / ODM project per product or variant.',fields,id ? 'Save Changes' : 'Create Project',async data => {
       const customerId = String(data.customerOption || '').split(' | ')[0];
       delete data.customerOption;
       data.customerId = customerId;
       if (!id) {
         data.formulaStatus='Not Started'; data.packagingStatus='Not Started'; data.artworkStatus='Not Started'; data.approvalStatus='Pending';
       }
-      const record = id ? CRMData.update('projects', id, data) : CRMData.create('projects', data);
+      const record = id ? await CRMData.update('projects', id, data) : await CRMData.create('projects', data);
       closeModal(); toast(id ? 'Project updated.' : 'Project created.'); location.hash = '#projects/' + record.id;
     });
   }
@@ -706,7 +735,7 @@ function renderProjectDetail(id) {
 
     pageRoot.innerHTML =
       '<div class="detail-header"><div><a class="back-link" href="#projects"><i data-lucide="arrow-left"></i> Projects</a><p class="eyebrow">OEM / ODM PROJECT</p><h1>' + esc(p.name) + '</h1><p>' + esc(p.id) + ' · ' + esc(getCustomerName(p.customerId)) + '</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-project" data-id="' + esc(p.id) + '">Edit Project</button><button class="primary-button" data-action="new-sample" data-project-id="' + esc(p.id) + '"><i data-lucide="plus"></i> Add Sample</button></div></div>' +
-      '<div class="project-status-bar"><div><span>Project Status</span>' + badge(p.status) + '</div><div><span>Formula</span>' + badge(p.formulaStatus) + '</div><div><span>Packaging</span>' + badge(p.packagingStatus) + '</div><div><span>Artwork</span>' + badge(p.artworkStatus) + '</div><div><span>Approval</span>' + badge(p.approvalStatus) + '</div></div>' +
+      '<div class="project-status-bar"><div><span>Project Status</span>' + badge(p.status) + '</div><div><span>Formula</span>' + badge(p.formulaStatus || 'Not Started') + '</div><div><span>Packaging</span>' + badge(p.packagingStatus) + '</div><div><span>Artwork</span>' + badge(p.artworkStatus) + '</div><div><span>Approval</span>' + badge(p.approvalStatus) + '</div></div>' +
       '<div class="project-tabs" id="projectTabs">' +
         projectTabButton('overview','Overview',true) +
         projectTabButton('brief','Product Brief') +
@@ -809,8 +838,8 @@ function renderProjectDetail(id) {
       inputField('Target Launch Date','launchDate',p.launchDate,'date',false) +
       inputField('MOQ','moq',p.moq,'text',false) +
       inputField('Target Price','targetPrice',p.targetPrice,'text',false);
-    modalForm('Product Brief','Maintain the structured customer product brief.',fields,'Save Brief',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
+    modalForm('Product Brief','Maintain the structured customer product brief.',fields,'Save Brief',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
     });
   }
 
@@ -823,8 +852,8 @@ function renderProjectDetail(id) {
       inputField('R&D Owner','formulaOwner',p.formulaOwner || p.rdOwner,'text',false) +
       inputField('Approval Date','formulaApprovalDate',p.formulaApprovalDate,'date',false) +
       textAreaField('Formula Notes','formulaComments',p.formulaComments,true);
-    modalForm('Formula Control','Track formula version, status and approval record.',fields,'Save Formula',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
+    modalForm('Formula Control','Track formula version, status and approval record.',fields,'Save Formula',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
     });
   }
 
@@ -840,8 +869,8 @@ function renderProjectDetail(id) {
       inputField('Supplier','packagingSupplier',p.packagingSupplier,'text',false) +
       selectField('Sample / Procurement Status','packagingStatus',p.packagingStatus || 'Not Started',['Not Started','Searching','Sample Requested','Sample Received','Compatibility Check','Sample Approved','Approved','Rejected'],true) +
       selectField('Compatibility Status','compatibilityStatus',p.compatibilityStatus || 'Not Tested',['Not Tested','Testing','Passed','Failed','Hold'],true);
-    modalForm('Packaging Specification','Track the primary pack and compatibility status.',fields,'Save Packaging',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
+    modalForm('Packaging Specification','Track the primary pack and compatibility status.',fields,'Save Packaging',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
     });
   }
 
@@ -854,8 +883,8 @@ function renderProjectDetail(id) {
       inputField('Artwork Owner','artworkOwner',p.artworkOwner,'text',false) +
       inputField('Approval Date','artworkApprovalDate',p.artworkApprovalDate,'date',false) +
       textAreaField('Artwork Notes','artworkNotes',p.artworkNotes,true);
-    modalForm('Artwork Control','Keep artwork versions and the final approved state visible.',fields,'Save Artwork',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
+    modalForm('Artwork Control','Keep artwork versions and the final approved state visible.',fields,'Save Artwork',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
     });
   }
 
@@ -868,8 +897,8 @@ function renderProjectDetail(id) {
       inputField('Approved / Reviewed By','approvalBy',p.approvalBy,'text',false) +
       inputField('Approval Date','approvalDate',p.approvalDate,'date',false) +
       textAreaField('Approval Comment','approvalComment',p.approvalComment,true);
-    modalForm('Approval Record','Record who approved or rejected the current project gate.',fields,'Save Approval',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
+    modalForm('Approval Record','Record who approved or rejected the current project gate.',fields,'Save Approval',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
     });
   }
 
@@ -877,8 +906,8 @@ function renderProjectDetail(id) {
     const p = CRMData.get('projects', id);
     if (!p) return;
     const fields = textAreaField('Document References','documents',p.documents,true);
-    modalForm('Project Documents','Add one file name, Drive link or document reference per line.',fields,'Save Documents',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
+    modalForm('Project Documents','Add one file name, Drive link or document reference per line.',fields,'Save Documents',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
     });
   }
 
@@ -900,7 +929,7 @@ function renderProjectDetail(id) {
       selectField('Project','projectOption',selected,options,true) +
       inputField('Version','version',s.version || 'V1','text',true) +
       inputField('R&D Owner','rdOwner',s.rdOwner,'text',true) +
-      inputField('Created Date','createdDate',s.createdDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Created Date','createdDate',s.createdDate || localDateKey(),'date',true) +
       inputField('Quantity','quantity',s.quantity,'number',false) +
       selectField('Status','status',s.status || 'Preparing',['Preparing','Ready','Sent','Feedback Waiting','Revision','Approved','Rejected'],true) +
       inputField('Dispatch Date','dispatchDate',s.dispatchDate,'date',false) +
@@ -908,16 +937,22 @@ function renderProjectDetail(id) {
       inputField('Tracking / AWB','tracking',s.tracking,'text',false) +
       inputField('Expected Feedback Date','feedbackDate',s.feedbackDate,'date',false) +
       textAreaField('Customer Feedback','feedback',s.feedback,true);
-    modalForm(sampleId ? 'Edit Sample' : 'New Sample','Create a new version without overwriting previous versions.',fields,sampleId ? 'Save Changes' : 'Create Sample',data => {
+    modalForm(sampleId ? 'Edit Sample' : 'New Sample','Create a new version without overwriting previous versions.',fields,sampleId ? 'Save Changes' : 'Create Sample',async data => {
       const pid = String(data.projectOption || '').split(' | ')[0];
       delete data.projectOption;
       data.projectId = pid;
       if (!sampleId) {
         const versionNum = String(data.version || 'V1').replace(/\D/g,'') || '1';
         data.id = 'SMP-' + pid.replace(/\D/g,'').padStart(3,'0') + '-V' + versionNum;
+        if (CRMData.get('samples', data.id)) {
+          throw new Error('This sample version already exists. Use a new version number.');
+        }
       }
-      sampleId ? CRMData.update('samples', sampleId, data) : CRMData.create('samples', data);
-      closeModal(); toast(sampleId ? 'Sample updated.' : 'Sample created.'); renderRoute();
+      if (sampleId) await CRMData.update('samples', sampleId, data);
+      else await CRMData.create('samples', data);
+      closeModal();
+      toast(sampleId ? 'Sample updated.' : 'Sample created.');
+      renderRoute();
     });
   }
 
@@ -952,14 +987,14 @@ function renderQuotations() {
       inputField('Valid Until','validUntil',q.validUntil,'date',false) +
       selectField('Status','status',q.status || 'Draft',['Draft','Sent','Revision','Accepted','Rejected','Expired'],true) +
       textAreaField('Notes','notes',q.notes,true);
-    modalForm(quotationId ? 'Edit Quotation' : 'New Quotation','Accepted quotations can be converted directly into orders.',fields,quotationId ? 'Save Changes' : 'Create Quotation',data => {
+    modalForm(quotationId ? 'Edit Quotation' : 'New Quotation','Accepted quotations can be converted directly into orders.',fields,quotationId ? 'Save Changes' : 'Create Quotation',async data => {
       data.projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      quotationId ? CRMData.update('quotations', quotationId, data) : CRMData.create('quotations', data);
+      quotationId ? await CRMData.update('quotations', quotationId, data) : await CRMData.create('quotations', data);
       closeModal(); toast(quotationId ? 'Quotation updated.' : 'Quotation created.'); renderRoute();
     });
   }
 
-  function convertQuotationToOrder(id) {
+  async function convertQuotationToOrder(id) {
     const q = CRMData.get('quotations', id);
     if (!q) return;
     if (q.status !== 'Accepted') {
@@ -971,14 +1006,14 @@ function renderQuotations() {
       return;
     }
     const project = CRMData.get('projects', q.projectId);
-    if (!project) return;
-    const order = CRMData.create('orders', {
+    if (!project) throw new Error('Linked project could not be found.');
+    const order = await CRMData.create('orders', {
       quoteId:q.id,
       customerId:project.customerId,
       projectId:project.id,
       po:'',
       quantity:q.moq || '',
-      orderDate:new Date().toISOString().slice(0,10),
+      orderDate:localDateKey(),
       committedDate:'',
       paymentStatus:'Pending',
       total:'',
@@ -1009,30 +1044,59 @@ function renderOrders() {
     const projects = CRMData.list('projects');
     const options = projects.map(p => p.id + ' | ' + p.name);
     const selected = o.projectId ? o.projectId + ' | ' + getProjectName(o.projectId) : (projectId ? projectId + ' | ' + getProjectName(projectId) : (options[0] || ''));
-    const fields =
-      selectField('Project','projectOption',selected,options,true) +
-      inputField('Customer PO','po',o.po,'text',false) +
-      inputField('Quantity','quantity',o.quantity,'number',true) +
-      inputField('Order Date','orderDate',o.orderDate || new Date().toISOString().slice(0,10),'date',true) +
-      inputField('Committed Date','committedDate',o.committedDate,'date',false) +
-      selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
-      selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
-      selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
-      selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
-      inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
-      inputField('Order Value','total',o.total,'text',false) +
-      inputField('Advance Received','advance',o.advance,'text',false) +
-      inputField('Balance','balance',o.balance,'text',false) +
-      inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
-      selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true) +
-      textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
-    modalForm(orderId ? 'Update Order' : 'New Order','Use one record to manage commercial and operational status.',fields,orderId ? 'Save Changes' : 'Create Order',data => {
-      const pid = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      const project = CRMData.get('projects', pid);
-      data.projectId = pid; data.customerId = project ? project.customerId : '';
-      if (orderId) CRMData.update('orders', orderId, data);
-      else CRMData.create('orders', data);
-      closeModal(); toast(orderId ? 'Order updated.' : 'Order created.');
+    const operationsOnly = Boolean(orderId) && (returnView === 'operations' || session.role === 'Operations');
+    const financeOnly = Boolean(orderId) && session.role === 'Finance';
+
+    let fields = '';
+    if (operationsOnly) {
+      fields =
+        inputField('Committed Date','committedDate',o.committedDate,'date',false) +
+        selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
+        selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
+        selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
+        selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
+        inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
+        textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
+    } else if (financeOnly) {
+      fields =
+        inputField('Order Value','total',o.total,'text',false) +
+        inputField('Advance Received','advance',o.advance,'text',false) +
+        inputField('Balance','balance',o.balance,'text',false) +
+        inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
+        selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true);
+    } else {
+      fields =
+        selectField('Project','projectOption',selected,options,true) +
+        inputField('Customer PO','po',o.po,'text',false) +
+        inputField('Quantity','quantity',o.quantity,'number',true) +
+        inputField('Order Date','orderDate',o.orderDate || localDateKey(),'date',true) +
+        inputField('Committed Date','committedDate',o.committedDate,'date',false) +
+        selectField('Readiness','readiness',o.readiness || 'Not Ready',['Not Ready','Ready'],true) +
+        selectField('Production Status','productionStatus',o.productionStatus || 'Planned',['Planned','Materials Ready','Manufacturing','Filling / Packing','QC Hold','Released','Ready to Dispatch'],true) +
+        selectField('QC Status','qcStatus',o.qcStatus || 'Waiting',['Waiting','Testing','Hold','Released','Rejected'],true) +
+        selectField('Dispatch Status','dispatchStatus',o.dispatchStatus || 'Not Ready',['Not Ready','Ready','Dispatched','In Transit','Delivered'],true) +
+        inputField('Dispatch / Tracking No.','tracking',o.tracking,'text',false) +
+        inputField('Order Value','total',o.total,'text',false) +
+        inputField('Advance Received','advance',o.advance,'text',false) +
+        inputField('Balance','balance',o.balance,'text',false) +
+        inputField('Payment Due','paymentDue',o.paymentDue,'date',false) +
+        selectField('Payment Status','paymentStatus',o.paymentStatus || 'Pending',['Pending','Partial','Paid','Overdue'],true) +
+        textAreaField('Operations Notes','operationsNotes',o.operationsNotes,true);
+    }
+
+    modalForm(orderId ? 'Update Order' : 'New Order','Use one record to manage commercial and operational status.',fields,orderId ? 'Save Changes' : 'Create Order',async data => {
+      if (!operationsOnly && !financeOnly) {
+        const pid = String(data.projectOption).split(' | ')[0];
+        delete data.projectOption;
+        const project = CRMData.get('projects', pid);
+        if (!project) throw new Error('Select a valid project.');
+        data.projectId = pid;
+        data.customerId = project.customerId;
+      }
+      if (orderId) await CRMData.update('orders', orderId, data);
+      else await CRMData.create('orders', data);
+      closeModal();
+      toast(orderId ? 'Order updated.' : 'Order created.');
       if (returnView === 'operations') location.hash = '#operations';
       else renderRoute();
     });
@@ -1043,7 +1107,7 @@ function renderOperations() {
     const orders = CRMData.list('orders');
     const cards = orders.map(o =>
       '<article class="operation-card"><div class="operation-head"><div><span>' + esc(o.id) + '</span><h3>' + esc(getProjectName(o.projectId)) + '</h3><p>' + esc(getCustomerName(o.customerId)) + '</p></div>' + badge(o.productionStatus) + '</div>' +
-      '<div class="operation-steps"><div class="' + (/Materials|Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling|QC|Released|Ready/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.qcStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Dispatched|In Transit|Delivered/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div>' +
+      '<div class="operation-steps"><div class="' + (/Materials Ready|Manufacturing|Filling \/ Packing|QC Hold|Released|Ready to Dispatch/.test(o.productionStatus) ? 'done' : '') + '"><span>1</span><small>Materials</small></div><div class="' + (/Manufacturing|Filling \/ Packing|QC Hold|Released|Ready to Dispatch/.test(o.productionStatus) ? 'done' : '') + '"><span>2</span><small>Production</small></div><div class="' + (/Released|Ready/.test(o.qcStatus) ? 'done' : '') + '"><span>3</span><small>QC</small></div><div class="' + (/Dispatched|In Transit|Delivered/.test(o.dispatchStatus) ? 'done' : '') + '"><span>4</span><small>Dispatch</small></div></div>' +
       '<div class="detail-grid compact">' + detailItem('Quantity',o.quantity) + detailItem('Committed',o.committedDate) + detailItem('QC',o.qcStatus) + detailItem('Dispatch',o.dispatchStatus) + '</div>' +
       (o.operationsNotes ? '<p class="body-copy operation-note">' + esc(o.operationsNotes) + '</p>' : '') +
       '<div class="operation-actions"><button class="secondary-button" data-action="edit-operation" data-id="' + esc(o.id) + '"><i data-lucide="sliders-horizontal"></i> Update Status</button></div></article>'
@@ -1145,7 +1209,7 @@ function renderOperations() {
         '<div class="calendar-cell-head"><button class="calendar-day-number" data-action="new-calendar-event" data-date="' + key + '">' + d.getDate() + '</button>' +
         (key===todayKey ? '<span class="today-label">Today</span>' : '') + '</div>' +
         '<div class="calendar-cell-events">' + eventHtml +
-        (dayEvents.length>3 ? '<button class="calendar-more" data-action="new-calendar-event" data-date="' + key + '">+' + (dayEvents.length-3) + ' more</button>' : '') +
+        (dayEvents.length>3 ? '<button class="calendar-more" data-action="calendar-more" data-date="' + key + '">+' + (dayEvents.length-3) + ' more</button>' : '') +
         '</div></div>';
     }
 
@@ -1176,6 +1240,17 @@ function renderOperations() {
     lucide.createIcons();
   }
 
+  function showCalendarDayEvents(date) {
+    const events = calendarEventCache.filter(e => e.date === date);
+    const rows = events.map(e => {
+      const action = e.system ? 'calendar-linked-event' : 'edit-calendar-event';
+      const meta = (e.time ? e.time + ' · ' : '') + (e.type || 'Schedule');
+      return '<button type="button" class="calendar-day-list-item" data-action="' + action + '" data-id="' + esc(e.id) + '">' +
+        '<span>' + esc(meta) + '</span><strong>' + esc(e.title) + '</strong><i data-lucide="chevron-right"></i></button>';
+    }).join('');
+    openModal('<p class="eyebrow">CALENDAR</p><h2>' + esc(date) + '</h2><p class="modal-subtitle">All schedules for this date.</p><div class="calendar-day-list">' + (rows || '<p class="empty-text">No schedules.</p>') + '</div>');
+  }
+
   function showCalendarLinkedEvent(id) {
     const event = calendarEventCache.find(e => e.id === id && e.system);
     if (!event) {
@@ -1203,50 +1278,22 @@ function renderOperations() {
     if (close) close.addEventListener('click', closeModal);
   }
 
-  function showCalendarLinkedEvent(id) {
-    const event = calendarEventCache.find(e => e.id === id && e.system);
-    if (!event) {
-      toast('This linked schedule is no longer available.');
-      return;
-    }
-
-    const html =
-      '<div class="calendar-detail-modal">' +
-        '<div class="calendar-detail-top">' +
-          '<span class="calendar-detail-type">' + esc(event.type) + '</span>' +
-          '<span class="calendar-detail-date">' + esc(event.date) + (event.time ? ' · ' + esc(event.time) : '') + '</span>' +
-        '</div>' +
-        '<h2>' + esc(event.title) + '</h2>' +
-        '<p class="calendar-detail-description">' + esc(event.description || 'Review the related CRM record for this schedule.') + '</p>' +
-        '<div class="detail-grid compact calendar-detail-grid">' +
-          detailItem('Related', event.related || '—') +
-          detailItem('Record ID', event.recordId || '—') +
-        '</div>' +
-        '<div class="modal-actions">' +
-          '<button type="button" class="secondary-button" id="calendarDetailClose">Close</button>' +
-          '<button type="button" class="primary-button" data-action="calendar-open-related" data-target="' + esc(event.link || '#calendar') + '"><i data-lucide="arrow-up-right"></i> Open Related Record</button>' +
-        '</div>' +
-      '</div>';
-
-    openModal(html);
-    const close = document.getElementById('calendarDetailClose');
-    if (close) close.addEventListener('click', closeModal);
-  }
+  
 
   function openCalendarEventForm(id, presetDate) {
     const e = id ? CRMData.get('calendarEvents', id) : {};
     const fields =
       inputField('Title','title',e.title,'text',true,true) +
-      inputField('Date','date',e.date || presetDate || new Date().toISOString().slice(0,10),'date',true) +
+      inputField('Date','date',e.date || presetDate || localDateKey(),'date',true) +
       inputField('Time','time',e.time || '09:00','time',false) +
       selectField('Type','type',e.type || 'Meeting',['Meeting','Internal','Follow-up','Deadline','Production','Dispatch','Payment','Other'],true) +
       textAreaField('Notes','notes',e.notes,true);
 
-    modalForm(id ? 'Edit Schedule' : 'Add Schedule','Add an internal schedule directly to the CRM calendar.',fields,id ? 'Save Schedule' : 'Add Schedule',data => {
+    modalForm(id ? 'Edit Schedule' : 'Add Schedule','Add an internal schedule directly to the CRM calendar.',fields,id ? 'Save Schedule' : 'Add Schedule',async data => {
       data.createdBy = e.createdBy || session.name;
       data.createdByUid = e.createdByUid || session.uid || session.id || '';
-      if (id) CRMData.update('calendarEvents', id, data);
-      else CRMData.create('calendarEvents', data);
+      if (id) await CRMData.update('calendarEvents', id, data);
+      else await CRMData.create('calendarEvents', data);
       closeModal();
       toast(id ? 'Schedule updated.' : 'Schedule added.');
       const d = new Date(data.date+'T00:00:00');
@@ -1256,7 +1303,8 @@ function renderOperations() {
 
     if (id) {
       const actions = document.querySelector('#recordForm .modal-actions');
-      if (actions) {
+      const canDeleteThisEvent = ['Admin','Management'].includes(session.role) || (e.createdByUid && e.createdByUid === session.uid);
+      if (actions && canDeleteThisEvent) {
         const del = document.createElement('button');
         del.type='button';
         del.className='secondary-button calendar-delete-button';
@@ -1269,9 +1317,9 @@ function renderOperations() {
     }
   }
 
-  function deleteCalendarEvent(id) {
+  async function deleteCalendarEvent(id) {
     if (!confirm('Delete this schedule?')) return;
-    const result = CRMData.remove('calendarEvents', id);
+    const result = await CRMData.remove('calendarEvents', id);
     if (result && result.ok === false) {
       toast('This schedule could not be deleted.');
       return;
@@ -1284,12 +1332,11 @@ function renderOperations() {
   function renderSettings() {
     const state = CRMData.getState();
     const canManageUsers = CRMData.can('users','manage');
-    const canManageSettings = CRMData.can('settings','manage');
     const activeUsers = state.users.filter(u => u.active !== false).length;
 
     const userRows = state.users.map(u =>
       '<tr><td><div class="staff-name-cell"><span class="staff-avatar">' + esc(initials(u.name)) + '</span><div><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></div></div></td><td>' + esc(u.department) + '</td><td>' + badge(u.role === 'Admin' ? 'Master' : u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td><td class="actions-cell">' +
-        (canManageUsers ? '<button class="row-action" data-action="edit-user" data-id="' + esc(u.id) + '"><i data-lucide="pencil"></i></button><button class="row-action" title="Toggle Active" data-action="toggle-user" data-id="' + esc(u.id) + '"><i data-lucide="power"></i></button>' : '') +
+        (canManageUsers ? '<button class="row-action" aria-label="Edit staff" data-action="edit-user" data-id="' + esc(u.id) + '"><i data-lucide="pencil"></i></button><button class="row-action" aria-label="Toggle staff access" title="Toggle Active" data-action="toggle-user" data-id="' + esc(u.id) + '"><i data-lucide="power"></i></button>' : '') +
       '</td></tr>'
     ).join('');
 
@@ -1298,14 +1345,14 @@ function renderOperations() {
     ).join('');
 
     pageRoot.innerHTML =
-      pageHeading('Staff & Settings','Manage staff accounts and keep the system configuration simple.',
+      pageHeading('Staff & Settings','Manage staff access and review the production CRM configuration.',
         canManageUsers ? '<button class="primary-button" data-action="new-user"><i data-lucide="user-plus"></i> Add Staff</button>' : '') +
       '<div class="staff-summary-grid">' +
         '<div><span>Total Staff</span><strong>' + state.users.length + '</strong></div>' +
         '<div><span>Active</span><strong>' + activeUsers + '</strong></div>' +
         '<div><span>Master / Management</span><strong>' + state.users.filter(u => u.role === 'Admin' || u.role === 'Management').length + '</strong></div>' +
       '</div>' +
-      '<section class="panel table-panel staff-panel"><div class="panel-head"><div><i data-lucide="users-round"></i><h2>Staff Management</h2></div><span class="count-pill">' + state.users.length + '</span></div><p class="panel-description">The Master account creates staff accounts, assigns a role and can deactivate access when needed.</p><div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
+      '<section class="panel table-panel staff-panel"><div class="panel-head"><div><i data-lucide="users-round"></i><h2>Staff Management</h2></div><span class="count-pill">' + state.users.length + '</span></div><p class="panel-description">The Master account creates staff accounts, assigns roles and can deactivate access when needed.</p><div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
       '<div class="record-grid settings-compact-grid">' +
         '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Access Roles</h2></div></div><div class="role-brief-list">' +
           '<div><strong>Master</strong><span>Full access + staff management</span></div>' +
@@ -1317,11 +1364,10 @@ function renderOperations() {
         '</div></section>' +
         '<section class="panel"><div class="panel-head"><div><i data-lucide="database"></i><h2>System & Backup</h2></div></div><div class="detail-grid compact">' +
           detailItem('Data Provider',CRMData.providerName) + detailItem('Schema',state.schemaVersion || '—') + detailItem('Currency',state.settings.defaultCurrency) + detailItem('Company',state.settings.companyName) +
-        '</div><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export Backup</button>' + (canManageSettings ? '<button class="secondary-button" data-action="import-data"><i data-lucide="upload"></i> Import</button>' : '') + '</div></section>' +
+        '</div><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export Backup</button></div></section>' +
       '</div>' +
-      '<details class="panel settings-details"><summary><span><i data-lucide="cloud-cog"></i><strong>Firebase Readiness</strong></span><small>Technical setup</small></summary><div class="check-list settings-details-body"><span class="done"><i data-lucide="check"></i> Provider abstraction</span><span class="done"><i data-lucide="check"></i> Role model</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup / import</span><span><i data-lucide="circle"></i> Firebase credentials</span><span><i data-lucide="circle"></i> Deploy security rules</span></div></details>' +
-      '<details class="panel settings-details"><summary><span><i data-lucide="scroll-text"></i><strong>Audit Log</strong></span><small>' + (state.auditLogs || []).length + ' records</small></summary><div class="table-wrap settings-details-body"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></details>' +
-      (canManageSettings ? '<section class="panel danger-zone compact-danger"><div><h2>Reset Local Demo</h2><p>Use only while testing before Firebase is connected.</p></div><button class="secondary-button" data-action="reset-data">Reset</button></section>' : '');
+      '<details class="panel settings-details"><summary><span><i data-lucide="cloud-cog"></i><strong>Production Backend</strong></span><small>Firebase connected</small></summary><div class="check-list settings-details-body"><span class="done"><i data-lucide="check"></i> Firebase Authentication</span><span class="done"><i data-lucide="check"></i> Firestore data provider</span><span class="done"><i data-lucide="check"></i> Role permissions</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup export</span></div></details>' +
+      '<details class="panel settings-details"><summary><span><i data-lucide="scroll-text"></i><strong>Audit Log</strong></span><small>' + (state.auditLogs || []).length + ' records</small></summary><div class="table-wrap settings-details-body"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></details>';
   }
 
   function openUserForm(id) {
@@ -1340,7 +1386,7 @@ function renderOperations() {
       delete data.temporaryPassword;
       try {
         if (id) {
-          CRMData.update('users', id, data);
+          await CRMData.update('users', id, data);
         } else {
           if (!tempPassword || tempPassword.length < 6) throw new Error('Temporary password must be at least 6 characters.');
           await CRMData.createStaff(data, tempPassword);
@@ -1361,14 +1407,14 @@ function renderOperations() {
     });
   }
 
-  function toggleUser(id) {
+  async function toggleUser(id) {
     const u = CRMData.get('users', id);
     if (!u) return;
     if (u.email === session.email && u.active !== false) {
       toast('You cannot deactivate your own current session.');
       return;
     }
-    CRMData.update('users', id, {active:!u.active});
+    await CRMData.update('users', id, {active:!u.active});
     toast(u.active ? 'User deactivated.' : 'User activated.');
     renderRoute();
   }
@@ -1379,7 +1425,7 @@ function renderOperations() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jncos-crm-backup-' + new Date().toISOString().slice(0,10) + '.json';
+    a.download = 'jncos-crm-backup-' + localDateKey() + '.json';
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1403,7 +1449,7 @@ function renderOperations() {
     lucide.createIcons();
   }
 
-  function deleteRecord(collection, id, label) {
+  async function deleteRecord(collection, id, label) {
     const dependencies = CRMData.getDependencies ? CRMData.getDependencies(collection, id) : [];
     if (dependencies.length) {
       const summary = dependencies.map(d => d.count + ' ' + d.collection).join(', ');
@@ -1411,7 +1457,7 @@ function renderOperations() {
       return;
     }
     if (!confirm('Delete this ' + label + '?')) return;
-    const result = CRMData.remove(collection, id);
+    const result = await CRMData.remove(collection, id);
     if (result && result.ok === false) {
       toast('This record cannot be deleted while linked records exist.');
       return;

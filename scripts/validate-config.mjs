@@ -42,3 +42,36 @@ for (const script of scriptOrder) {
 }
 
 console.log('JN COS TECH CRM validation passed.');
+
+
+const appJs = fs.readFileSync('app.js', 'utf8');
+const login = fs.readFileSync('login.html', 'utf8');
+const appConfig = fs.readFileSync('app-config.js', 'utf8');
+
+const calendarBindingCount = (appJs.match(/let calendarEventCache = \[\];/g) || []).length;
+if (calendarBindingCount !== 1) {
+  throw new Error(`Expected exactly one calendarEventCache binding, found ${calendarBindingCount}`);
+}
+
+const linkedCalendarFnCount = (appJs.match(/function showCalendarLinkedEvent\(id\)/g) || []).length;
+if (linkedCalendarFnCount !== 1) {
+  throw new Error(`Expected exactly one showCalendarLinkedEvent function, found ${linkedCalendarFnCount}`);
+}
+
+if (/test@jncostech\.com|Test login|\/ 1111/.test(login)) {
+  throw new Error('Production login must not expose test credentials.');
+}
+
+if (!/name="robots" content="noindex,nofollow,noarchive"/.test(login) || !/name="robots" content="noindex,nofollow,noarchive"/.test(index)) {
+  throw new Error('Production CRM pages must include noindex metadata.');
+}
+
+if (!/dataProvider:\s*'firebase'/.test(appConfig)) {
+  throw new Error('Production CRM must use the Firebase data provider.');
+}
+
+if (/jnc-demo-mode/.test(fs.readFileSync('data-provider.js','utf8'))) {
+  throw new Error('Production data provider must not support demo-mode fallback.');
+}
+
+console.log('Production launch checks passed.');

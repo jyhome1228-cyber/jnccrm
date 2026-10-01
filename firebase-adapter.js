@@ -160,8 +160,11 @@
     modules.setDoc(modules.doc(db,'activities',id),rec).catch(console.warn);
   }
 
-  function create(c,data){
-    const rec={...data}; if(!rec.id) rec.id=nextId(c); rec.updatedAt=now(); if(['customers','leads','users'].includes(c)&&!rec.createdAt) rec.createdAt=now();
+  async function create(c,data){
+    const rec={...data};
+    if(!rec.id) rec.id=nextId(c);
+    rec.updatedAt=now();
+    if(['customers','leads','users'].includes(c)&&!rec.createdAt) rec.createdAt=now();
 
     if (c === 'projects') {
       const formula = {
@@ -174,31 +177,35 @@
         updatedAt:now()
       };
       ['formulaVersion','formulaStatus','formulaOwner','formulaApprovalDate','formulaComments'].forEach(k => delete rec[k]);
-      state[c].unshift({...rec,...{
+      await modules.setDoc(modules.doc(db,c,rec.id),rec);
+      if (session && ['Admin','Management','R&D'].includes(session.role)) {
+        await modules.setDoc(modules.doc(db,'formulas',rec.id),formula,{merge:true});
+      }
+      const merged={...rec,
         formulaVersion:formula.version,
         formulaStatus:formula.status,
         formulaOwner:formula.rdOwner,
         formulaApprovalDate:formula.approvalDate,
         formulaComments:formula.comments
-      }});
+      };
+      state[c].unshift(merged);
       emit();
-      modules.setDoc(modules.doc(db,c,rec.id),rec)
-        .then(async()=> {
-          if (session && ['Admin','Management','R&D'].includes(session.role)) {
-            await modules.setDoc(modules.doc(db,'formulas',rec.id),formula,{merge:true});
-          }
-          audit('create',c,rec.id,null,rec); activity('project created',rec.id);
-        }).catch(console.error);
-      return clone(state[c][0]);
+      audit('create',c,rec.id,null,rec);
+      activity('project created',rec.id);
+      return clone(merged);
     }
 
-    state[c].unshift(rec); emit();
-    modules.setDoc(modules.doc(db,c,rec.id),rec).then(()=>{audit('create',c,rec.id,null,rec);activity(c.slice(0,-1)+' created',rec.id)}).catch(e=>console.error(e));
+    await modules.setDoc(modules.doc(db,c,rec.id),rec);
+    state[c].unshift(rec);
+    emit();
+    audit('create',c,rec.id,null,rec);
+    activity(c.slice(0,-1)+' created',rec.id);
     return clone(rec);
   }
 
-  function update(c,id,data){
-    const i=(state[c]||[]).findIndex(x=>x.id===id); if(i<0) return null;
+  async function update(c,id,data){
+    const i=(state[c]||[]).findIndex(x=>x.id===id);
+    if(i<0) throw new Error('Record not found: ' + id);
 
     if (c === 'projects') {
       const formulaKeys = ['formulaVersion','formulaStatus','formulaOwner','formulaApprovalDate','formulaComments'];
@@ -211,6 +218,9 @@
         }
       });
 
+      const before=clone(state[c][i]);
+      const rec={...state[c][i],...data,updatedAt:now()};
+
       if (Object.keys(formulaPatch).length) {
         const f = {
           projectId:id,
@@ -221,26 +231,29 @@
           comments:formulaPatch.formulaComments || '',
           updatedAt:now()
         };
-        modules.setDoc(modules.doc(db,'formulas',id),f,{merge:true})
-          .then(()=>audit('update','formulas',id,null,f))
-          .catch(console.error);
+        await modules.setDoc(modules.doc(db,'formulas',id),f,{merge:true});
+        audit('update','formulas',id,null,f);
       }
-
-      const before=clone(state[c][i]);
-      const rec={...state[c][i],...data,updatedAt:now()};
-      state[c][i]=rec; emit();
 
       if (Object.keys(projectPatch).length) {
         const projectDoc={...projectPatch,updatedAt:rec.updatedAt};
-        modules.setDoc(modules.doc(db,c,id),projectDoc,{merge:true})
-          .then(()=>{audit('update',c,id,before,rec);activity('project updated',id)})
-          .catch(console.error);
+        await modules.setDoc(modules.doc(db,c,id),projectDoc,{merge:true});
       }
+
+      state[c][i]=rec;
+      emit();
+      audit('update',c,id,before,rec);
+      activity('project updated',id);
       return clone(rec);
     }
 
-    const before=clone(state[c][i]); const rec={...state[c][i],...data,updatedAt:now()}; state[c][i]=rec; emit();
-    modules.setDoc(modules.doc(db,c,id),rec,{merge:true}).then(()=>{audit('update',c,id,before,rec);activity(c.slice(0,-1)+' updated',id)}).catch(console.error);
+    const before=clone(state[c][i]);
+    const rec={...state[c][i],...data,updatedAt:now()};
+    await modules.setDoc(modules.doc(db,c,id),rec,{merge:true});
+    state[c][i]=rec;
+    emit();
+    audit('update',c,id,before,rec);
+    activity(c.slice(0,-1)+' updated',id);
     return clone(rec);
   }
 
@@ -252,11 +265,16 @@
     return deps;
   }
 
-  function remove(c,id){
-    const deps=getDependencies(c,id); if(deps.length) return {ok:false,dependencies:deps};
-    const i=(state[c]||[]).findIndex(x=>x.id===id); if(i<0) return {ok:false,dependencies:[]};
-    const before=clone(state[c][i]); state[c].splice(i,1); emit();
-    modules.deleteDoc(modules.doc(db,c,id)).then(()=>audit('delete',c,id,before,null)).catch(console.error);
+  async function remove(c,id){
+    const deps=getDependencies(c,id);
+    if(deps.length) return {ok:false,dependencies:deps};
+    const i=(state[c]||[]).findIndex(x=>x.id===id);
+    if(i<0) return {ok:false,dependencies:[]};
+    const before=clone(state[c][i]);
+    await modules.deleteDoc(modules.doc(db,c,id));
+    state[c].splice(i,1);
+    emit();
+    audit('delete',c,id,before,null);
     return {ok:true,dependencies:[]};
   }
 

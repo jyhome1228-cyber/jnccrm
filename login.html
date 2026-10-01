@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=20260929-favicon-whitecrm" />
-  <link rel="shortcut icon" href="./assets/favicon.svg?v=20260929-favicon-whitecrm" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg?v=20261001-open" />
+  <link rel="shortcut icon" href="./assets/favicon.svg?v=20261001-open" />
   <title>Sign in · JN COS TECH CRM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260929-favicon-whitecrm" />
+  <link rel="stylesheet" href="./styles.css?v=20261001-open" />
   <style>
     /* Cache-independent brand fallback */
     :root{--brand:#2A1A12}
@@ -27,7 +28,7 @@
   <main class="login-layout">
     <section class="login-brand-panel">
       <div class="login-brand">
-        <img class="brand-logo brand-logo-on-dark login-brand-logo" src="./assets/jncos-logo.svg?v=20260929-1148" alt="JN COS TECH" />
+        <img class="brand-logo brand-logo-on-dark login-brand-logo" src="./assets/jncos-logo.svg?v=20261001-open" alt="JN COS TECH" />
         <span class="brand-product">CRM</span>
       </div>
       <div class="login-message">
@@ -47,20 +48,15 @@
           <strong>Master account</strong>
           <span>admin@jncostech.com</span>
         </div>
-        <div class="master-login-note" style="margin-top:-12px">
-          <strong>Test login</strong>
-          <span>test@jncostech.com / 1111</span>
-        </div>
 
         <label>Email
-          <input id="loginEmail" type="email" placeholder="admin@jncostech.com" required />
+          <input id="loginEmail" type="email" placeholder="admin@jncostech.com" required autocomplete="username" autofocus />
         </label>
         <label>Password
-          <input id="loginPassword" type="password" placeholder="Enter your password" required minlength="4" />
+          <input id="loginPassword" type="password" placeholder="Enter your password" required minlength="6" autocomplete="current-password" />
         </label>
 
-        <div class="login-row">
-          <label class="remember"><input type="checkbox" checked /> Remember me</label>
+        <div class="login-row login-row-end">
           <a href="#" id="forgotLink">Forgot password?</a>
         </div>
 
@@ -71,10 +67,10 @@
     </section>
   </main>
 
-  <script src="./app-config.js?v=20260929-test1111b"></script>
-  <script src="./crm-store.js?v=20260929-test1111b"></script>
-  <script src="./firebase-adapter.js?v=20260929-test1111b"></script>
-  <script src="./data-provider.js?v=20260929-test1111b"></script>
+  <script src="./app-config.js?v=20261001-open"></script>
+  <script src="./crm-store.js?v=20261001-open"></script>
+  <script src="./firebase-adapter.js?v=20261001-open"></script>
+  <script src="./data-provider.js?v=20261001-open"></script>
   <script>
     (async () => {
       const error = document.getElementById('loginError');
@@ -112,20 +108,6 @@
         sessionStorage.setItem('jnc-login-email', email);
 
         error.classList.add('hidden');
-
-        if (email.toLowerCase() === 'test@jncostech.com' && password === '1111') {
-          try {
-            sessionStorage.setItem('jnc-demo-mode','1');
-            CRMStore.setSession('test@jncostech.com');
-            sessionStorage.removeItem('jnc-login-email');
-            location.assign('./index.html#dashboard');
-            return;
-          } catch (err) {
-            sessionStorage.removeItem('jnc-demo-mode');
-            showError(err.message || 'Unable to start test mode.');
-            return;
-          }
-        }
 
         if (!email || password.length < 6) {
           showError('Please enter your email and Firebase password.');
