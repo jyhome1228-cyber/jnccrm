@@ -62,6 +62,16 @@ async function attachDiagnostics(page, label) {
     assert((await page.locator('#pageRoot').innerText()).trim().length > 0, `${label} page rendered empty.`);
   }
 
+  await page.locator('a.nav-item[data-view="leads"]').click();
+  await page.waitForTimeout(120);
+  assert(await page.locator('[data-action="import-request-pdf"]').isVisible(), 'Import Request PDF button is missing on Leads.');
+  const pdfRuntime = await page.evaluate(() => ({
+    pdfjs: typeof window.pdfjsLib !== 'undefined',
+    parser: typeof window.JNCRequestParser !== 'undefined'
+  }));
+  assert(pdfRuntime.pdfjs, 'PDF.js runtime did not load.');
+  assert(pdfRuntime.parser, 'JN COS request parser did not load.');
+
   await page.goto(base + '/login.html', { waitUntil: 'networkidle', timeout: 30000 });
   await page.fill('#loginEmail', 'qa@example.com');
   await page.fill('#loginPassword', '1234');
