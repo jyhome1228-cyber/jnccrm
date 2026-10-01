@@ -636,21 +636,64 @@ function getDashboardScope() {
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const pdf = await window.pdfjsLib.getDocument({data:bytes}).promise;
-    const pages = [];
+    const pageBlocks = [];
 
     for (let pageNumber=1; pageNumber<=pdf.numPages; pageNumber++) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent({normalizeWhitespace:true});
-      const parts = [];
-      content.items.forEach(item => {
-        const value = String(item.str || '').trim();
-        if (value) parts.push(value);
-        if (item.hasEOL) parts.push('\n');
-        else parts.push(' ');
+
+      const items = content.items
+        .map((item,index) => ({
+          text:String(item.str || '').replace(/\s+/g,' ').trim(),
+          x:Number(item.transform && item.transform[4]) || 0,
+          y:Number(item.transform && item.transform[5]) || 0,
+          index
+        }))
+        .filter(item => item.text);
+
+      const rows = [];
+      const sorted = items.slice().sort((a,b) => {
+        if (Math.abs(a.y - b.y) > 2.5) return b.y - a.y;
+        if (Math.abs(a.x - b.x) > 1) return a.x - b.x;
+        return a.index - b.index;
       });
-      pages.push(parts.join(''));
+
+      for (const item of sorted) {
+        let row = rows.find(r => Math.abs(r.y - item.y) <= 2.5);
+        if (!row) {
+          row = {y:item.y,items:[]};
+          rows.push(row);
+        }
+        row.items.push(item);
+      }
+
+      rows.sort((a,b) => b.y - a.y);
+
+      const lines = rows.map(row => {
+        const rowItems = row.items.sort((a,b) => a.x - b.x || a.index - b.index);
+        const cells = [];
+        let current = '';
+        let previousX = null;
+
+        rowItems.forEach(item => {
+          const startsNewCell = current && previousX != null && (item.x - previousX) > 90;
+          if (startsNewCell) {
+            cells.push(current.trim());
+            current = item.text;
+          } else {
+            current = (current ? current + ' ' : '') + item.text;
+          }
+          previousX = item.x;
+        });
+
+        if (current.trim()) cells.push(current.trim());
+        return cells.join('\t');
+      }).filter(Boolean);
+
+      pageBlocks.push(lines.join('\n'));
     }
-    return pages.join('\n');
+
+    return pageBlocks.join('\n');
   }
 
   async function importRequestPdf(file) {
