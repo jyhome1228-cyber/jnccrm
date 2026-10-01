@@ -1,3 +1,4 @@
+// Live deployment smoke test
 import { chromium } from 'playwright';
 
 const base = process.env.CRM_BASE_URL || 'https://jyhome1228-cyber.github.io/jnccrm';
