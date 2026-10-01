@@ -1,214 +1,115 @@
 # JN COS TECH CRM
 
-Phase 1 internal CRM for JN Cos Tech.
+Internal Phase 1 CRM for JN COS TECH.
 
-## Navigation
+## Production status
 
-1. Dashboard
-2. Customers
-3. Leads
-4. Projects
-5. Samples
-6. Quotations
-7. Orders
-8. Operations
-9. Calendar
+The current build uses:
+
+- Firebase Authentication
+- Cloud Firestore
+- Firestore role-based security rules
+- Browser-local Firebase session persistence
+- Firebase-backed audit/activity records
+- Responsive desktop/mobile UI
+
+The production entry points are protected by Firebase Authentication and include `noindex / nofollow` metadata.
+
+## Main navigation
+
+1. Calendar
+2. Dashboard
+3. Customers
+4. Leads
+5. Projects
+6. Samples
+7. Quotations
+8. Orders
+9. Operations
 10. Settings
 
 ## Core workflow
 
-Lead / Enquiry  
-→ Customer  
-→ OEM / ODM Project  
-→ Product Brief  
-→ Sample Versions / Feedback  
-→ Formula / Artwork Approval  
-→ Quotation  
-→ Order  
-→ Production  
-→ QC  
-→ Dispatch  
-→ Payment Status
+`Lead / Enquiry → Customer → OEM / ODM Project → Product Brief → Sample → Formula / Packaging / Artwork Approval → Quotation → Order → Production → QC → Dispatch → Payment`
 
-## Implemented in this phase
+## Roles
 
-### Authentication shell
-- Login screen
-- Browser session persistence
-- Protected CRM entry
-- Sign out
+- **Master / Admin** — full access and staff management
+- **Management** — company-wide operational visibility
+- **Sales** — customers, leads, projects, samples, quotations and order creation
+- **R&D** — projects, confidential formulas and samples
+- **Operations** — production, QC, dispatch and operational order fields
+- **Finance** — quotations, payment and finance-related order fields
+- **Staff** — limited customer/project/sample/calendar visibility
 
-> Current authentication is intentionally local for Phase 1 prototyping. Replace it with Firebase Auth, Supabase Auth or another production authentication provider before real customer data is stored.
+Frontend permission guards are backed by Firestore Security Rules. UI permissions are not treated as the security boundary.
 
-### Dashboard
-- Live KPI counts from CRM records
-- Upcoming schedule
-- Projects requiring attention
-- Recent activity
-- Project status chart
-- Lead pipeline chart
-- Payment status chart
-- Recent leads
-- Notification count
+## Production safeguards
 
-### Customers
-- Create / edit / delete
-- Customer company information
-- Customer 360° detail screen
-- Linked projects, quotations and orders
-- Internal notes
+- CRM writes wait for Firestore success before showing a success state.
+- Failed writes remain visible in the form with an error message.
+- Linked-record delete protection prevents destructive deletion of in-use records.
+- Lead → Project conversion includes duplicate-conversion protection.
+- Sample versions include duplicate ID protection.
+- Accepted quotations can only be converted into one order.
+- Operations and Finance receive role-specific order edit forms.
+- Manual calendar deletion is limited to the creator, Management or Admin.
+- Production mode cannot fall back to browser demo data.
+- Test credentials are not exposed in the login UI.
+- JSON backup export remains available to authorized settings users.
 
-### Leads
-- Create / edit / delete
-- Enquiry type and source
-- Owner and next action
-- Pipeline status
-- Convert Lead → Customer + Project
+## Calendar
 
-### Projects
-- Create / edit / delete
-- Customer relation
-- Sales and R&D owners
-- Project status
-- Detailed tabbed project workspace
-- Product Brief structured fields
-- Formula version / owner / status / approval date / notes
-- Packaging specification / supplier / compatibility
-- Artwork version / approval status / notes
-- Approval records with approver, date and comments
-- Document references
-- Project activity history
-- Linked samples, quotations and orders
+The calendar combines:
 
-### Samples
-- Create / edit / delete
-- Version control structure
-- Dispatch information
-- Tracking / AWB
-- Expected feedback date
-- Customer feedback
-
-### Quotations
-- Create / edit / delete
-- Project relation
-- Version, MOQ, unit price, terms, lead time and validity
-- Commercial status
-- Accepted Quotation → Order conversion
-- Duplicate order conversion prevention
-
-### Orders
-- Create / edit / delete
-- Project and customer relation
-- Quotation reference
-- PO / quantity / committed date
-- Readiness
-- Production status
-- QC status
-- Dispatch status / tracking
-- Payment status
-- Operations notes
-
-### Operations
-- Production visibility
-- QC status
-- Dispatch status
-- Per-order progress view
-- Direct status update control from Operations
-- Operations notes and committed dates
-
-### Calendar
 - Lead follow-ups
-- Project targets
+- Project target dates
 - Sample feedback dates
-- Quotation expiry
-- Order committed dates
+- Quotation validity dates
+- Order committed / dispatch dates
 - Payment due dates
+- Internal manual schedules
 
-### Global functions
-- Search across core records
-- Notifications
-- Activity history
-- Responsive desktop/mobile navigation
-- Persistent local demo data
+Linked CRM schedules open a detail preview before navigation. Dates with more than three schedules open a complete daily schedule list.
 
-## Current data layer
+## Data model
 
-The current build uses browser `localStorage` through `crm-store.js`.
+Primary collections:
 
-This is suitable for:
-- UX validation
-- Workflow testing
-- Client review
-- Phase 1 frontend development
+- `customers`
+- `leads`
+- `projects`
+- `formulas`
+- `samples`
+- `quotations`
+- `orders`
+- `calendarEvents`
+- `users`
+- `activities`
+- `auditLogs`
 
-It is **not** suitable for production multi-user use.
+Formula records remain separated from general project records because they require more restrictive R&D / Management access.
 
-## Next backend step
+## Validation
 
-Recommended next milestone:
+Run:
 
-1. Connect production authentication.
-2. Replace localStorage with a shared cloud database.
-3. Apply role-based permissions.
-4. Add file storage.
-5. Connect JN Cos Tech website enquiries to Leads.
-6. Add audit logs at database level.
+```bash
+npm run validate
+```
 
-## Suggested backend
+Validation checks:
 
-A practical next stack is:
+- JavaScript syntax
+- Required files
+- JSON configuration
+- Script loading order
+- Firebase production provider
+- Calendar duplicate declarations/functions
+- Accidental production test-credential exposure
+- Required `noindex` metadata
+- Demo-provider fallback regression
 
-- Firebase Authentication
-- Firestore
-- Firebase Storage
+## Scope
 
-or an equivalent Supabase/PostgreSQL implementation.
-
-## Phase 1 scope note
-
-This CRM should remain an operational workflow system rather than a full ERP. Full inventory valuation, detailed factory records, accounting replacement, WhatsApp API, courier API and advanced analytics should be handled as later integrations.
-
-
-## Latest workflow milestone
-
-The core Phase 1 workflow is now interactive through:
-
-`Lead → Customer / Project → Product Brief → Formula / Packaging / Artwork / Approval → Sample → Quotation → Accepted Quote → Order → Production / QC / Dispatch`
-
-The next implementation milestone is the shared backend:
-
-- production authentication
-- shared database
-- cloud file storage
-- real role permissions
-- website enquiry integration
-
-
-## Pre-Firebase preparation completed
-
-The CRM is now prepared for the backend connection stage.
-
-Completed before Firebase:
-- swappable data-provider architecture
-- schema versioning and local data migration
-- role / permission matrix
-- frontend permission guards
-- confidential Formula visibility restricted to Management / R&D / Admin
-- user management preparation
-- active / inactive user state
-- audit log structure
-- linked-record delete protection
-- JSON backup export
-- JSON backup import
-- Firebase configuration template
-- Firestore Security Rules draft
-- role-aware Storage Rules draft
-- Firestore indexes
-- Firebase deployment config
-- documented Firestore data model
-- Firebase connection checklist
-- GitHub Actions source validation
-
-Validation workflow currently checks JavaScript syntax, JSON configuration and required project files on every push.
-
-At this point, the remaining backend work starts when the Firebase project configuration is provided.
+This remains an operational CRM rather than a full ERP. Detailed inventory valuation, factory MES functionality, accounting replacement, courier APIs, WhatsApp APIs and advanced analytics should be added as later integrations when required.
