@@ -625,8 +625,8 @@ function getDashboardScope() {
       inputField('Sales Owner','owner',c.owner || session.name,'text',true) +
       inputField('Payment Terms','paymentTerms',c.paymentTerms,'text',false,true) +
       textAreaField('Internal Notes','notes',c.notes,true);
-    modalForm(id ? 'Edit Customer' : 'New Customer','Customer company and account information.',fields,id ? 'Save Changes' : 'Create Customer',data => {
-      id ? CRMData.update('customers', id, data) : CRMData.create('customers', data);
+    modalForm(id ? 'Edit Customer' : 'New Customer','Customer company and account information.',fields,id ? 'Save Changes' : 'Create Customer',async data => {
+      id ? await CRMData.update('customers', id, data) : await CRMData.create('customers', data);
       closeModal(); toast(id ? 'Customer updated.' : 'Customer created.'); renderRoute();
     });
   }
@@ -657,8 +657,8 @@ function getDashboardScope() {
       inputField('Next Action Date','nextActionDate',l.nextActionDate,'date',false) +
       inputField('Next Action','nextAction',l.nextAction,'text',false,true) +
       textAreaField('Enquiry Details','details',l.details,true);
-    modalForm(id ? 'Edit Lead' : 'New Lead','Record the enquiry and always assign a next action.',fields,id ? 'Save Changes' : 'Create Lead',data => {
-      id ? CRMData.update('leads', id, data) : CRMData.create('leads', data);
+    modalForm(id ? 'Edit Lead' : 'New Lead','Record the enquiry and always assign a next action.',fields,id ? 'Save Changes' : 'Create Lead',async data => {
+      id ? await CRMData.update('leads', id, data) : await CRMData.create('leads', data);
       closeModal(); toast(id ? 'Lead updated.' : 'Lead created.'); renderRoute();
     });
   }
@@ -733,14 +733,14 @@ function getDashboardScope() {
       inputField('MOQ','moq',p.moq,'text',false) +
       inputField('Target Price','targetPrice',p.targetPrice,'text',false) +
       textAreaField('Product Brief','brief',p.brief,true);
-    modalForm(id ? 'Edit Project' : 'New Project','Create one OEM / ODM project per product or variant.',fields,id ? 'Save Changes' : 'Create Project',data => {
+    modalForm(id ? 'Edit Project' : 'New Project','Create one OEM / ODM project per product or variant.',fields,id ? 'Save Changes' : 'Create Project',async data => {
       const customerId = String(data.customerOption || '').split(' | ')[0];
       delete data.customerOption;
       data.customerId = customerId;
       if (!id) {
         data.formulaStatus='Not Started'; data.packagingStatus='Not Started'; data.artworkStatus='Not Started'; data.approvalStatus='Pending';
       }
-      const record = id ? CRMData.update('projects', id, data) : CRMData.create('projects', data);
+      const record = id ? await CRMData.update('projects', id, data) : await CRMData.create('projects', data);
       closeModal(); toast(id ? 'Project updated.' : 'Project created.'); location.hash = '#projects/' + record.id;
     });
   }
@@ -863,8 +863,8 @@ function renderProjectDetail(id) {
       inputField('Target Launch Date','launchDate',p.launchDate,'date',false) +
       inputField('MOQ','moq',p.moq,'text',false) +
       inputField('Target Price','targetPrice',p.targetPrice,'text',false);
-    modalForm('Product Brief','Maintain the structured customer product brief.',fields,'Save Brief',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
+    modalForm('Product Brief','Maintain the structured customer product brief.',fields,'Save Brief',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Product brief updated.'); renderRoute();
     });
   }
 
@@ -877,8 +877,8 @@ function renderProjectDetail(id) {
       inputField('R&D Owner','formulaOwner',p.formulaOwner || p.rdOwner,'text',false) +
       inputField('Approval Date','formulaApprovalDate',p.formulaApprovalDate,'date',false) +
       textAreaField('Formula Notes','formulaComments',p.formulaComments,true);
-    modalForm('Formula Control','Track formula version, status and approval record.',fields,'Save Formula',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
+    modalForm('Formula Control','Track formula version, status and approval record.',fields,'Save Formula',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Formula information updated.'); renderRoute();
     });
   }
 
@@ -894,8 +894,8 @@ function renderProjectDetail(id) {
       inputField('Supplier','packagingSupplier',p.packagingSupplier,'text',false) +
       selectField('Sample / Procurement Status','packagingStatus',p.packagingStatus || 'Not Started',['Not Started','Searching','Sample Requested','Sample Received','Compatibility Check','Sample Approved','Approved','Rejected'],true) +
       selectField('Compatibility Status','compatibilityStatus',p.compatibilityStatus || 'Not Tested',['Not Tested','Testing','Passed','Failed','Hold'],true);
-    modalForm('Packaging Specification','Track the primary pack and compatibility status.',fields,'Save Packaging',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
+    modalForm('Packaging Specification','Track the primary pack and compatibility status.',fields,'Save Packaging',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Packaging updated.'); renderRoute();
     });
   }
 
@@ -908,8 +908,8 @@ function renderProjectDetail(id) {
       inputField('Artwork Owner','artworkOwner',p.artworkOwner,'text',false) +
       inputField('Approval Date','artworkApprovalDate',p.artworkApprovalDate,'date',false) +
       textAreaField('Artwork Notes','artworkNotes',p.artworkNotes,true);
-    modalForm('Artwork Control','Keep artwork versions and the final approved state visible.',fields,'Save Artwork',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
+    modalForm('Artwork Control','Keep artwork versions and the final approved state visible.',fields,'Save Artwork',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Artwork updated.'); renderRoute();
     });
   }
 
@@ -922,8 +922,8 @@ function renderProjectDetail(id) {
       inputField('Approved / Reviewed By','approvalBy',p.approvalBy,'text',false) +
       inputField('Approval Date','approvalDate',p.approvalDate,'date',false) +
       textAreaField('Approval Comment','approvalComment',p.approvalComment,true);
-    modalForm('Approval Record','Record who approved or rejected the current project gate.',fields,'Save Approval',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
+    modalForm('Approval Record','Record who approved or rejected the current project gate.',fields,'Save Approval',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Approval record updated.'); renderRoute();
     });
   }
 
@@ -931,8 +931,8 @@ function renderProjectDetail(id) {
     const p = CRMData.get('projects', id);
     if (!p) return;
     const fields = textAreaField('Document References','documents',p.documents,true);
-    modalForm('Project Documents','Add one file name, Drive link or document reference per line.',fields,'Save Documents',data => {
-      CRMData.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
+    modalForm('Project Documents','Add one file name, Drive link or document reference per line.',fields,'Save Documents',async data => {
+      await CRMData.update('projects', id, data); closeModal(); toast('Document references updated.'); renderRoute();
     });
   }
 
@@ -1012,9 +1012,9 @@ function renderQuotations() {
       inputField('Valid Until','validUntil',q.validUntil,'date',false) +
       selectField('Status','status',q.status || 'Draft',['Draft','Sent','Revision','Accepted','Rejected','Expired'],true) +
       textAreaField('Notes','notes',q.notes,true);
-    modalForm(quotationId ? 'Edit Quotation' : 'New Quotation','Accepted quotations can be converted directly into orders.',fields,quotationId ? 'Save Changes' : 'Create Quotation',data => {
+    modalForm(quotationId ? 'Edit Quotation' : 'New Quotation','Accepted quotations can be converted directly into orders.',fields,quotationId ? 'Save Changes' : 'Create Quotation',async data => {
       data.projectId = String(data.projectOption).split(' | ')[0]; delete data.projectOption;
-      quotationId ? CRMData.update('quotations', quotationId, data) : CRMData.create('quotations', data);
+      quotationId ? await CRMData.update('quotations', quotationId, data) : await CRMData.create('quotations', data);
       closeModal(); toast(quotationId ? 'Quotation updated.' : 'Quotation created.'); renderRoute();
     });
   }
@@ -1357,12 +1357,11 @@ function renderOperations() {
   function renderSettings() {
     const state = CRMData.getState();
     const canManageUsers = CRMData.can('users','manage');
-    const canManageSettings = CRMData.can('settings','manage');
     const activeUsers = state.users.filter(u => u.active !== false).length;
 
     const userRows = state.users.map(u =>
       '<tr><td><div class="staff-name-cell"><span class="staff-avatar">' + esc(initials(u.name)) + '</span><div><strong>' + esc(u.name) + '</strong><small class="cell-sub">' + esc(u.email) + '</small></div></div></td><td>' + esc(u.department) + '</td><td>' + badge(u.role === 'Admin' ? 'Master' : u.role) + '</td><td>' + (u.active ? badge('Active') : badge('Inactive')) + '</td><td class="actions-cell">' +
-        (canManageUsers ? '<button class="row-action" data-action="edit-user" data-id="' + esc(u.id) + '"><i data-lucide="pencil"></i></button><button class="row-action" title="Toggle Active" data-action="toggle-user" data-id="' + esc(u.id) + '"><i data-lucide="power"></i></button>' : '') +
+        (canManageUsers ? '<button class="row-action" aria-label="Edit staff" data-action="edit-user" data-id="' + esc(u.id) + '"><i data-lucide="pencil"></i></button><button class="row-action" aria-label="Toggle staff access" title="Toggle Active" data-action="toggle-user" data-id="' + esc(u.id) + '"><i data-lucide="power"></i></button>' : '') +
       '</td></tr>'
     ).join('');
 
@@ -1371,14 +1370,14 @@ function renderOperations() {
     ).join('');
 
     pageRoot.innerHTML =
-      pageHeading('Staff & Settings','Manage staff accounts and keep the system configuration simple.',
+      pageHeading('Staff & Settings','Manage staff access and review the production CRM configuration.',
         canManageUsers ? '<button class="primary-button" data-action="new-user"><i data-lucide="user-plus"></i> Add Staff</button>' : '') +
       '<div class="staff-summary-grid">' +
         '<div><span>Total Staff</span><strong>' + state.users.length + '</strong></div>' +
         '<div><span>Active</span><strong>' + activeUsers + '</strong></div>' +
         '<div><span>Master / Management</span><strong>' + state.users.filter(u => u.role === 'Admin' || u.role === 'Management').length + '</strong></div>' +
       '</div>' +
-      '<section class="panel table-panel staff-panel"><div class="panel-head"><div><i data-lucide="users-round"></i><h2>Staff Management</h2></div><span class="count-pill">' + state.users.length + '</span></div><p class="panel-description">The Master account creates staff accounts, assigns a role and can deactivate access when needed.</p><div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
+      '<section class="panel table-panel staff-panel"><div class="panel-head"><div><i data-lucide="users-round"></i><h2>Staff Management</h2></div><span class="count-pill">' + state.users.length + '</span></div><p class="panel-description">The Master account creates staff accounts, assigns roles and can deactivate access when needed.</p><div class="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div></section>' +
       '<div class="record-grid settings-compact-grid">' +
         '<section class="panel"><div class="panel-head"><div><i data-lucide="shield-check"></i><h2>Access Roles</h2></div></div><div class="role-brief-list">' +
           '<div><strong>Master</strong><span>Full access + staff management</span></div>' +
@@ -1390,11 +1389,10 @@ function renderOperations() {
         '</div></section>' +
         '<section class="panel"><div class="panel-head"><div><i data-lucide="database"></i><h2>System & Backup</h2></div></div><div class="detail-grid compact">' +
           detailItem('Data Provider',CRMData.providerName) + detailItem('Schema',state.schemaVersion || '—') + detailItem('Currency',state.settings.defaultCurrency) + detailItem('Company',state.settings.companyName) +
-        '</div><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export Backup</button>' + (canManageSettings ? '<button class="secondary-button" data-action="import-data"><i data-lucide="upload"></i> Import</button>' : '') + '</div></section>' +
+        '</div><div class="settings-button-row"><button class="secondary-button" data-action="export-data"><i data-lucide="download"></i> Export Backup</button></div></section>' +
       '</div>' +
-      '<details class="panel settings-details"><summary><span><i data-lucide="cloud-cog"></i><strong>Firebase Readiness</strong></span><small>Technical setup</small></summary><div class="check-list settings-details-body"><span class="done"><i data-lucide="check"></i> Provider abstraction</span><span class="done"><i data-lucide="check"></i> Role model</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup / import</span><span><i data-lucide="circle"></i> Firebase credentials</span><span><i data-lucide="circle"></i> Deploy security rules</span></div></details>' +
-      '<details class="panel settings-details"><summary><span><i data-lucide="scroll-text"></i><strong>Audit Log</strong></span><small>' + (state.auditLogs || []).length + ' records</small></summary><div class="table-wrap settings-details-body"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></details>' +
-      (canManageSettings ? '<section class="panel danger-zone compact-danger"><div><h2>Reset Local Demo</h2><p>Use only while testing before Firebase is connected.</p></div><button class="secondary-button" data-action="reset-data">Reset</button></section>' : '');
+      '<details class="panel settings-details"><summary><span><i data-lucide="cloud-cog"></i><strong>Production Backend</strong></span><small>Firebase connected</small></summary><div class="check-list settings-details-body"><span class="done"><i data-lucide="check"></i> Firebase Authentication</span><span class="done"><i data-lucide="check"></i> Firestore data provider</span><span class="done"><i data-lucide="check"></i> Role permissions</span><span class="done"><i data-lucide="check"></i> Audit structure</span><span class="done"><i data-lucide="check"></i> Backup export</span></div></details>' +
+      '<details class="panel settings-details"><summary><span><i data-lucide="scroll-text"></i><strong>Audit Log</strong></span><small>' + (state.auditLogs || []).length + ' records</small></summary><div class="table-wrap settings-details-body"><table><thead><tr><th>Date</th><th>User</th><th>Action</th><th>Collection</th><th>Record</th></tr></thead><tbody>' + (audits || '<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>') + '</tbody></table></div></details>';
   }
 
   function openUserForm(id) {
@@ -1413,7 +1411,7 @@ function renderOperations() {
       delete data.temporaryPassword;
       try {
         if (id) {
-          CRMData.update('users', id, data);
+          await CRMData.update('users', id, data);
         } else {
           if (!tempPassword || tempPassword.length < 6) throw new Error('Temporary password must be at least 6 characters.');
           await CRMData.createStaff(data, tempPassword);
