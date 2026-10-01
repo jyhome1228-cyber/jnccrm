@@ -22,6 +22,7 @@
   const modalContent = document.getElementById('modalContent');
   const closeModalButton = document.getElementById('closeModal');
   const toastEl = document.getElementById('toast');
+  const requestPdfInput = document.getElementById('requestPdfInput');
   let charts = [];
   let calendarCursor = new Date();
   let calendarEventCache = [];
@@ -37,6 +38,7 @@
   const actionPermissions = {
     'new-customer':['customers','create'], 'edit-customer':['customers','edit'], 'delete-customer':['customers','delete'],
     'new-lead':['leads','create'], 'edit-lead':['leads','edit'], 'delete-lead':['leads','delete'], 'lead-to-project':['projects','create'],
+    'import-request-pdf':['leads','create'], 'view-lead-request':['leads','view'],
     'new-project':['projects','create'], 'edit-project':['projects','edit'], 'delete-project':['projects','delete'],
     'new-sample':['samples','create'], 'edit-sample':['samples','edit'],
     'new-quotation':['quotations','create'], 'edit-quotation':['quotations','edit'], 'convert-quotation':['orders','create'],
@@ -87,6 +89,24 @@
 
   document.getElementById('notificationButton').addEventListener('click', () => renderNotifications());
 
+  requestPdfInput.addEventListener('change', async () => {
+    const file = requestPdfInput.files && requestPdfInput.files[0];
+    if (!file) return;
+    try {
+      await importRequestPdf(file);
+    } catch (error) {
+      console.error('Request PDF import failed:', error);
+      openModal(
+        '<p class="eyebrow">REQUEST PDF IMPORT</p>' +
+        '<h2>Could not read this request</h2>' +
+        '<p class="modal-subtitle">' + esc(error && error.message ? error.message : error) + '</p>' +
+        '<div class="import-error-note">Use the standard JN COS TECH Project Request PDF exported from the Admin Dashboard.</div>'
+      );
+    } finally {
+      requestPdfInput.value = '';
+    }
+  });
+
   document.addEventListener('click', async e => {
     const button = e.target.closest('[data-action]');
     if (!button) return;
@@ -109,6 +129,8 @@
     if (action === 'edit-customer') openCustomerForm(id);
     if (action === 'delete-customer') await deleteRecord('customers', id, 'customer');
     if (action === 'new-lead') openLeadForm();
+    if (action === 'import-request-pdf') requestPdfInput.click();
+    if (action === 'view-lead-request') showLeadRequest(id);
     if (action === 'edit-lead') openLeadForm(id);
     if (action === 'delete-lead') await deleteRecord('leads', id, 'lead');
     if (action === 'lead-to-project') await convertLeadToProject(id);
@@ -607,15 +629,241 @@ function getDashboardScope() {
     });
   }
 
+  async function extractRequestPdfText(file) {
+    if (!window.pdfjsLib) throw new Error('PDF reader is not available. Refresh the CRM and try again.');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pdf = await window.pdfjsLib.getDocument({data:bytes}).promise;
+    const pages = [];
+
+    for (let pageNumber=1; pageNumber<=pdf.numPages; pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent({normalizeWhitespace:true});
+      const parts = [];
+      content.items.forEach(item => {
+        const value = String(item.str || '').trim();
+        if (value) parts.push(value);
+        if (item.hasEOL) parts.push('\n');
+        else parts.push(' ');
+      });
+      pages.push(parts.join(''));
+    }
+    return pages.join('\n');
+  }
+
+  async function importRequestPdf(file) {
+    if (!/\.pdf$/i.test(file.name || '') && file.type !== 'application/pdf') {
+      throw new Error('Please select a PDF file.');
+    }
+    if (!window.JNCRequestParser) throw new Error('Request parser is not available.');
+
+    openModal(
+      '<div class="import-loading"><span class="import-spinner"></span>' +
+      '<p class="eyebrow">REQUEST PDF IMPORT</p><h2>Reading project request…</h2>' +
+      '<p>Extracting company, project, formulation and packaging information.</p></div>'
+    );
+
+    const text = await extractRequestPdfText(file);
+    const parsed = window.JNCRequestParser.parse(text);
+    parsed.sourceRequestFileName = file.name;
+
+    const existing = parsed.sourceDocumentId
+      ? CRMData.list('leads').find(l => String(l.sourceDocumentId || '') === String(parsed.sourceDocumentId))
+      : null;
+
+    if (existing) {
+      closeModal();
+      openModal(
+        '<p class="eyebrow">REQUEST PDF IMPORT</p>' +
+        '<h2>Request already registered</h2>' +
+        '<p class="modal-subtitle">Document ' + esc(parsed.sourceDocumentId) + ' is already linked to ' + esc(existing.id) + '.</p>' +
+        '<div class="detail-grid compact">' +
+          detailItem('Company',existing.company) + detailItem('Contact',existing.contact) +
+          detailItem('Status',existing.status) + detailItem('Owner',existing.owner) +
+        '</div>' +
+        '<div class="modal-actions"><button class="secondary-button" id="duplicateRequestClose">Close</button>' +
+        '<button class="primary-button" data-action="view-lead-request" data-id="' + esc(existing.id) + '">View Request</button></div>'
+      );
+      document.getElementById('duplicateRequestClose')?.addEventListener('click', closeModal);
+      return;
+    }
+
+    openRequestPdfPreview(parsed, file.name);
+  }
+
+  function requestImportDetailGrid(data) {
+    return [
+      ['Document ID',data.sourceDocumentId],
+      ['Position',data.position],
+      ['Company Type',data.companyType],
+      ['Website / Social',data.website],
+      ['Preferred Contact',data.preferredContactMethod],
+      ['Preferred Contact Time',data.preferredContactTime],
+      ['Service Type',data.serviceType],
+      ['Product Categories',data.productCategory],
+      ['Project Stage',data.projectStage],
+      ['Target Markets',data.targetMarkets],
+      ['Launch Timing',data.launchTiming],
+      ['Initial Quantity',data.initialQuantity],
+      ['Skin / Product Concerns',data.concerns],
+      ['Textures / Finish',data.texture],
+      ['Hero Ingredients / Avoid List',data.heroIngredientsAvoidList],
+      ['Claims / Positioning',data.claims],
+      ['Fragrance',data.fragrance],
+      ['Reference Products',data.referenceProducts],
+      ['Packaging Support',data.packagingSupport],
+      ['Primary Packaging',data.primaryPackaging],
+      ['Secondary Packaging',data.secondaryPackaging],
+      ['Design Support',data.designSupport],
+      ['Certifications / Market Requirements',data.marketRequirements],
+      ['Key Requirements',data.keyRequirements],
+      ['Additional Notes',data.additionalNotes],
+      ['How They Found Us',data.howFoundUs],
+      ['Privacy Consent',data.privacyConsent]
+    ].map(([label,value]) => detailItem(label,value)).join('');
+  }
+
+  function openRequestPdfPreview(parsed, fileName) {
+    const warningHtml = (parsed.warnings || []).length
+      ? '<div class="import-warning"><strong>Check before creating</strong><span>' + esc(parsed.warnings.join(' · ')) + '</span></div>'
+      : '<div class="import-success"><i data-lucide="circle-check"></i><span>Standard JN COS TECH request format detected.</span></div>';
+
+    const fields =
+      inputField('Company / Brand','company',parsed.company,'text',true) +
+      inputField('Contact Person','contact',parsed.contact,'text',true) +
+      inputField('Email','email',parsed.email,'email',false) +
+      inputField('Phone / WhatsApp','phone',parsed.phone,'text',false) +
+      inputField('Country / Region','country',parsed.country,'text',true) +
+      selectField('Enquiry Type','type',parsed.type || 'Other',['OEM','ODM','Private Label','Export','Distributor','Dealer','Retail','Other'],true) +
+      inputField('Product Category','productCategory',parsed.productCategory,'text',false) +
+      inputField('Project Stage','projectStage',parsed.projectStage,'text',false) +
+      inputField('Owner','owner',session.name,'text',true) +
+      inputField('Next Action Date','nextActionDate',localDateKey(),'date',false) +
+      inputField('Next Action','nextAction','Review imported request','text',false,true);
+
+    const html =
+      '<p class="eyebrow">IMPORT PROJECT REQUEST</p>' +
+      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped</strong></div>' +
+      '<h2>Review detected request</h2>' +
+      '<p class="modal-subtitle">The PDF has been mapped to CRM fields. Check the core information, then create the Lead.</p>' +
+      warningHtml +
+      '<form class="record-form" id="requestPdfReviewForm">' +
+        '<div class="form-grid">' + fields + '</div>' +
+        '<details class="import-preview-details">' +
+          '<summary><span>Detected request details</span><small>Project · Formulation · Packaging</small></summary>' +
+          '<div class="detail-grid compact import-preview-grid">' + requestImportDetailGrid(parsed) + '</div>' +
+        '</details>' +
+        '<p class="helper-text import-helper">The PDF is read locally in your browser. This step stores the extracted CRM data and source file name; the PDF file itself is not uploaded.</p>' +
+        '<div class="modal-actions">' +
+          '<button type="button" class="secondary-button" id="cancelRequestImport">Cancel</button>' +
+          '<button type="submit" class="primary-button"><i data-lucide="user-plus"></i> Create Lead</button>' +
+        '</div>' +
+      '</form>';
+
+    openModal(html);
+    document.getElementById('cancelRequestImport')?.addEventListener('click', closeModal);
+    document.getElementById('requestPdfReviewForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const submit = e.currentTarget.querySelector('button[type="submit"]');
+      if (submit) submit.disabled = true;
+      try {
+        const formData = Object.fromEntries(new FormData(e.currentTarget).entries());
+        const duplicate = parsed.sourceDocumentId
+          ? CRMData.list('leads').find(l => String(l.sourceDocumentId || '') === String(parsed.sourceDocumentId))
+          : null;
+        if (duplicate) throw new Error('This request is already registered as ' + duplicate.id + '.');
+
+        const record = {
+          ...parsed,
+          company:formData.company,
+          contact:formData.contact,
+          email:formData.email,
+          phone:formData.phone,
+          country:formData.country,
+          type:formData.type,
+          productCategory:formData.productCategory,
+          projectStage:formData.projectStage,
+          owner:formData.owner,
+          nextActionDate:formData.nextActionDate,
+          nextAction:formData.nextAction,
+          source:'Website Request PDF',
+          status:'New',
+          importConfidence:parsed.confidence,
+          importWarnings:[...(parsed.warnings || [])],
+          importedAt:new Date().toISOString()
+        };
+        delete record.warnings;
+        delete record.confidence;
+
+        const created = await CRMData.create('leads', record);
+        closeModal();
+        toast('Request PDF imported as ' + created.id + '.');
+        renderRoute();
+      } catch (error) {
+        let errorEl = e.currentTarget.querySelector('.form-error');
+        if (!errorEl) {
+          errorEl = document.createElement('p');
+          errorEl.className = 'form-error field-span';
+          e.currentTarget.querySelector('.form-grid')?.appendChild(errorEl);
+        }
+        errorEl.textContent = error && error.message ? error.message : String(error || 'Unable to create Lead.');
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+  }
+
+  function showLeadRequest(id) {
+    const lead = CRMData.get('leads', id);
+    if (!lead) return;
+    const source = lead.sourceDocumentId || lead.sourceRequestFileName;
+    if (!source) {
+      openModal('<p class="eyebrow">LEAD DETAILS</p><h2>' + esc(lead.company) + '</h2><p class="modal-subtitle">No imported request PDF data is attached to this Lead.</p>');
+      return;
+    }
+
+    openModal(
+      '<p class="eyebrow">IMPORTED REQUEST</p>' +
+      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(lead.sourceRequestFileName || 'JN COS TECH Request') + '</span><strong>#' + esc(lead.sourceDocumentId || '—') + '</strong></div>' +
+      '<h2>' + esc(lead.company) + '</h2>' +
+      '<p class="modal-subtitle">' + esc(lead.contact) + (lead.email ? ' · ' + esc(lead.email) : '') + '</p>' +
+      '<div class="detail-grid compact import-preview-grid">' + requestImportDetailGrid(lead) + '</div>' +
+      '<div class="modal-actions">' +
+        '<button class="secondary-button" id="closeLeadRequest">Close</button>' +
+        '<button class="primary-button" data-action="lead-to-project" data-id="' + esc(lead.id) + '"><i data-lucide="folder-plus"></i> Convert to Project</button>' +
+      '</div>'
+    );
+    document.getElementById('closeLeadRequest')?.addEventListener('click', closeModal);
+  }
+
   function renderLeads() {
     const leads = CRMData.list('leads');
-    const rows = leads.map(l =>
-      '<tr><td><strong>' + esc(l.id) + '</strong></td><td>' + esc(l.company) + '<small class="cell-sub">' + esc(l.contact) + '</small></td><td>' + esc(l.type) + '</td><td>' + esc(l.source) + '</td><td>' + esc(l.owner) + '</td><td>' + badge(l.status) + '</td><td>' + esc(l.nextActionDate) + '<small class="cell-sub">' + esc(l.nextAction) + '</small></td><td class="actions-cell"><button class="row-action" title="Create Project" data-action="lead-to-project" data-id="' + esc(l.id) + '"><i data-lucide="folder-plus"></i></button><button class="row-action" data-action="edit-lead" data-id="' + esc(l.id) + '"><i data-lucide="pencil"></i></button><button class="row-action danger-action" data-action="delete-lead" data-id="' + esc(l.id) + '"><i data-lucide="trash-2"></i></button></td></tr>'
-    ).join('');
+    const rows = leads.map(l => {
+      const requestMeta = l.sourceDocumentId
+        ? '<small class="cell-sub">Request #' + esc(l.sourceDocumentId) + (l.productCategory ? ' · ' + esc(l.productCategory) : '') + '</small>'
+        : '<small class="cell-sub">' + esc(l.contact) + '</small>';
+      const requestButton = l.sourceDocumentId
+        ? '<button class="row-action" title="View Imported Request" aria-label="View Imported Request" data-action="view-lead-request" data-id="' + esc(l.id) + '"><i data-lucide="file-search-2"></i></button>'
+        : '';
+      return '<tr><td><strong>' + esc(l.id) + '</strong></td><td>' + esc(l.company) + requestMeta + '</td><td>' + esc(l.type) + '</td><td>' + esc(l.source) + '</td><td>' + esc(l.owner) + '</td><td>' + badge(l.status) + '</td><td>' + esc(l.nextActionDate) + '<small class="cell-sub">' + esc(l.nextAction) + '</small></td><td class="actions-cell">' +
+        requestButton +
+        '<button class="row-action" title="Create Project" aria-label="Create Project" data-action="lead-to-project" data-id="' + esc(l.id) + '"><i data-lucide="folder-plus"></i></button>' +
+        '<button class="row-action" title="Edit Lead" aria-label="Edit Lead" data-action="edit-lead" data-id="' + esc(l.id) + '"><i data-lucide="pencil"></i></button>' +
+        '<button class="row-action danger-action" title="Delete Lead" aria-label="Delete Lead" data-action="delete-lead" data-id="' + esc(l.id) + '"><i data-lucide="trash-2"></i></button></td></tr>';
+    }).join('');
+
+    const actions =
+      '<div class="page-heading-actions">' +
+        '<button class="secondary-button" data-action="import-request-pdf"><i data-lucide="file-up"></i> Import Request PDF</button>' +
+        '<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>' +
+      '</div>';
+
     pageRoot.innerHTML =
-      pageHeading('Leads','Capture enquiries, follow-ups and move qualified opportunities into projects.','<button class="primary-button" data-action="new-lead"><i data-lucide="plus"></i> New Lead</button>') +
+      pageHeading('Leads','Capture enquiries, follow-ups and move qualified opportunities into projects.',actions) +
       '<div class="pipeline-strip">' + ['New','Contacted','Qualified','Development','Quotation','Won'].map(s => '<div><span>' + s + '</span><strong>' + leads.filter(l=>l.status===s).length + '</strong></div>').join('') + '</div>' +
-      tableShell(['Lead','Company / Contact','Type','Source','Owner','Status','Next Action',''], rows, 'No leads yet.');
+      tableShell(['Lead','Company / Request','Type','Source','Owner','Status','Next Action',''], rows, 'No leads yet.');
   }
 
   function openLeadForm(id) {
@@ -648,36 +896,75 @@ function getDashboardScope() {
     }
     const existingProject = CRMData.list('projects').find(p => p.sourceLeadId === id);
     if (existingProject) {
+      closeModal();
       toast('This lead is already linked to ' + existingProject.id + '.');
       location.hash = '#projects/' + existingProject.id;
       return;
     }
+
     let customer = CRMData.list('customers').find(c => String(c.company || '').toLowerCase() === String(lead.company || '').toLowerCase());
     if (!customer) {
       customer = await CRMData.create('customers', {
-        company:lead.company, country:lead.country, type:lead.type, contact:lead.contact,
-        email:lead.email, phone:lead.phone, owner:lead.owner, status:'Active',
-        paymentTerms:'TBD', notes:'Created from ' + lead.id
+        company:lead.company,
+        country:lead.country,
+        type:lead.type,
+        contact:lead.contact,
+        email:lead.email,
+        phone:lead.phone,
+        owner:lead.owner,
+        status:'Active',
+        paymentTerms:'TBD',
+        notes:[
+          lead.position ? 'Contact position: ' + lead.position : '',
+          lead.companyType ? 'Company type: ' + lead.companyType : '',
+          lead.website ? 'Website: ' + lead.website : '',
+          lead.preferredContactTime ? 'Preferred contact: ' + lead.preferredContactTime : ''
+        ].filter(Boolean).join('\n')
       });
     }
+
+    const projectName = lead.productCategory
+      ? lead.productCategory + ' Development'
+      : lead.company + ' New Product';
+
     const project = await CRMData.create('projects', {
       customerId:customer.id,
       sourceLeadId:id,
-      name:lead.company + ' New Product',
-      category:'',
+      sourceDocumentId:lead.sourceDocumentId || '',
+      sourceRequestFileName:lead.sourceRequestFileName || '',
+      name:projectName,
+      category:lead.productCategory || '',
+      serviceType:lead.serviceType || lead.type || '',
+      projectStage:lead.projectStage || '',
+      targetMarkets:lead.targetMarkets || '',
+      launchTiming:lead.launchTiming || '',
       salesOwner:lead.owner,
       rdOwner:'',
       targetDate:'',
-      moq:'',
+      moq:lead.initialQuantity || '',
       targetPrice:'',
       status:'Brief Received',
-      brief:lead.details,
+      brief:lead.keyRequirements || lead.details || lead.additionalNotes || '',
+      concerns:lead.concerns || '',
+      claims:lead.claims || '',
+      texture:lead.texture || '',
+      fragrance:lead.fragrance || '',
+      benchmark:lead.referenceProducts || '',
+      heroIngredientsAvoidList:lead.heroIngredientsAvoidList || '',
+      packagingType:lead.primaryPackaging || '',
+      secondaryPackaging:lead.secondaryPackaging || '',
+      packagingSupport:lead.packagingSupport || '',
+      designSupport:lead.designSupport || '',
+      marketRequirements:lead.marketRequirements || '',
+      additionalNotes:lead.additionalNotes || '',
       formulaStatus:'Not Started',
       packagingStatus:'Not Started',
       artworkStatus:'Not Started',
       approvalStatus:'Pending'
     });
+
     await CRMData.update('leads', id, {status:'Development'});
+    closeModal();
     toast('Project ' + project.id + ' created from lead.');
     location.hash = '#projects/' + project.id;
   }
@@ -751,7 +1038,9 @@ function renderProjectDetail(id) {
         '<section class="project-tab-panel active" data-project-panel="overview">' +
           '<div class="record-grid">' +
             '<section class="panel"><div class="panel-head"><div><i data-lucide="circle-user-round"></i><h2>Project Overview</h2></div></div><div class="detail-grid compact">' +
-              detailItem('Customer',getCustomerName(p.customerId)) + detailItem('Category',p.category) + detailItem('Sales Owner',p.salesOwner) + detailItem('R&D Owner',p.rdOwner) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) + detailItem('Target Date',p.targetDate) + detailItem('Last Updated',fmtDate(p.updatedAt)) +
+              detailItem('Customer',getCustomerName(p.customerId)) + detailItem('Category',p.category) + detailItem('Service Type',p.serviceType) + detailItem('Request Stage',p.projectStage) +
+              detailItem('Target Markets',p.targetMarkets) + detailItem('Launch Timing',p.launchTiming) + detailItem('Sales Owner',p.salesOwner) + detailItem('R&D Owner',p.rdOwner) +
+              detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) + detailItem('Target Date',p.targetDate) + detailItem('Last Updated',fmtDate(p.updatedAt)) +
             '</div></section>' +
             '<section class="panel"><div class="panel-head"><div><i data-lucide="layers-3"></i><h2>Linked Records</h2></div></div><div class="metric-list"><div><span>Samples</span><strong>' + samples.length + '</strong></div><div><span>Quotations</span><strong>' + quotes.length + '</strong></div><div><span>Orders</span><strong>' + orders.length + '</strong></div></div></section>' +
           '</div>' +
@@ -761,9 +1050,10 @@ function renderProjectDetail(id) {
           '<section class="panel"><div class="panel-head"><div><i data-lucide="notebook-text"></i><h2>Product Brief</h2></div><button data-action="edit-project-brief" data-id="' + esc(p.id) + '">Edit</button></div>' +
           '<p class="body-copy">' + esc(p.brief || 'No product brief entered.') + '</p>' +
           '<div class="detail-grid compact project-detail-grid">' +
-            detailItem('Concept',p.concept) + detailItem('Claims',p.claims) + detailItem('Target Consumer',p.targetConsumer) + detailItem('Benchmark',p.benchmark) +
-            detailItem('Texture',p.texture) + detailItem('Fragrance',p.fragrance) + detailItem('Requested Actives',p.requestedActives) + detailItem('Excluded Ingredients',p.excludedIngredients) +
-            detailItem('Target Launch',p.launchDate) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) +
+            detailItem('Concept',p.concept) + detailItem('Skin / Product Concerns',p.concerns) + detailItem('Claims / Positioning',p.claims) + detailItem('Target Consumer',p.targetConsumer) +
+            detailItem('Reference Products',p.benchmark) + detailItem('Texture / Finish',p.texture) + detailItem('Fragrance',p.fragrance) +
+            detailItem('Hero Ingredients / Avoid List',p.heroIngredientsAvoidList || p.requestedActives) + detailItem('Excluded Ingredients',p.excludedIngredients) +
+            detailItem('Target Launch',p.launchDate || p.launchTiming) + detailItem('MOQ',p.moq) + detailItem('Target Price',p.targetPrice) +
           '</div></section>' +
         '</section>' +
 
@@ -777,7 +1067,8 @@ function renderProjectDetail(id) {
         '<section class="project-tab-panel" data-project-panel="packaging">' +
           '<section class="panel"><div class="panel-head"><div><i data-lucide="package"></i><h2>Packaging Specification</h2></div><button data-action="edit-project-packaging" data-id="' + esc(p.id) + '">Edit</button></div>' +
           '<div class="detail-grid compact project-detail-grid">' +
-            detailItem('Type',p.packagingType) + detailItem('Capacity',p.packagingCapacity) + detailItem('Material',p.packagingMaterial) + detailItem('Colour',p.packagingColor) +
+            detailItem('Primary Packaging',p.packagingType) + detailItem('Secondary Packaging',p.secondaryPackaging) + detailItem('Packaging Support',p.packagingSupport) + detailItem('Design Support',p.designSupport) +
+            detailItem('Market Requirements',p.marketRequirements) + detailItem('Capacity',p.packagingCapacity) + detailItem('Material',p.packagingMaterial) + detailItem('Colour',p.packagingColor) +
             detailItem('Component',p.packagingComponent) + detailItem('Supplier',p.packagingSupplier) + detailItem('Sample Status',p.packagingStatus) + detailItem('Compatibility',p.compatibilityStatus) +
           '</div></section>' +
         '</section>' +
