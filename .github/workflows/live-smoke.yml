@@ -2,6 +2,8 @@ name: Live CRM Smoke
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -32,9 +34,13 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Run live smoke test
+      - name: Start CRM test server
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/jnccrm-http.log 2>&1 &
+          sleep 2
+      - name: Run browser smoke test
         env:
-          CRM_BASE_URL: https://jyhome1228-cyber.github.io/jnccrm
+          CRM_BASE_URL: http://127.0.0.1:4173
         run: |
           mkdir -p artifacts
           node scripts/live-smoke.mjs
