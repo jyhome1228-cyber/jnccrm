@@ -14,7 +14,11 @@ function line(y, groups) {
   }
 }
 
+line(42,[{x:45,tokens:['JN','COS','TECH']}]);
+line(44.8,[{x:515,tokens:['EXPORTED']}]);
 line(65,[{x:45,tokens:['PROJECT','REQUEST','SUMMARY']}]);
+line(68.1,[{x:512,tokens:['DOCUMENT']}]);
+line(76.9,[{x:524,tokens:['87091740']}]);
 line(118,[{x:54,tokens:['COMPANY','/','BRAND']},{x:306,tokens:['CONTACT','PERSON']}]);
 line(132,[{x:54,tokens:['QA','Advisory']},{x:306,tokens:['Martin']}]);
 line(150,[{x:54,tokens:['POSITION']},{x:306,tokens:['COMPANY','TYPE']}]);
@@ -41,9 +45,11 @@ line(536,[{x:54,tokens:['Folding','carton']},{x:306,tokens:['Need','design','sup
 line(554,[{x:54,tokens:['CERTIFICATIONS','/','MARKET','REQUIREMENTS']}]);
 line(568,[{x:54,tokens:['EU']}]);
 
-const grouped = globalThis.JNCRequestPdfLayout.groupTextItems(items,{rowTolerance:4.5,columnGap:80});
+const grouped = globalThis.JNCRequestPdfLayout.groupTextItems(items,{rowTolerance:2.2,columnGap:80});
 
 const requiredRows = [
+  'DOCUMENT',
+  '87091740',
   'COMPANY / BRAND\tCONTACT PERSON',
   'QA Advisory\tMartin',
   'POSITION\tCOMPANY TYPE',
@@ -61,6 +67,7 @@ for (const row of requiredRows) {
 
 const parsed = globalThis.JNCRequestParser.parse(grouped.text);
 const expected = {
+  sourceDocumentId:'87091740',
   company:'QA Advisory',
   contact:'Martin',
   position:'Operations Manager',
