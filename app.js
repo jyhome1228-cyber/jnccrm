@@ -671,7 +671,7 @@ function getDashboardScope() {
         throw new Error('Request PDF layout reader is unavailable.');
       }
       const grouped = window.JNCRequestPdfLayout.groupTextItems(items, {
-        rowTolerance:4.5,
+        rowTolerance:2.2,
         columnGap:80
       });
       pageBlocks.push(grouped.text);
