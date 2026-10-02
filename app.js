@@ -667,46 +667,14 @@ function getDashboardScope() {
         })
         .filter(item => item.text);
 
-      const sorted = items.slice().sort((a,b) => {
-        if (Math.abs(a.y - b.y) > 3.5) return a.y - b.y;
-        if (Math.abs(a.x - b.x) > 1) return a.x - b.x;
-        return a.index - b.index;
-      });
-
-      const rows = [];
-      for (const item of sorted) {
-        let row = rows.find(r => Math.abs(r.y - item.y) <= 3.5);
-        if (!row) {
-          row = {y:item.y,items:[]};
-          rows.push(row);
-        }
-        row.items.push(item);
+      if (!window.JNCRequestPdfLayout) {
+        throw new Error('Request PDF layout reader is unavailable.');
       }
-      rows.sort((a,b) => a.y - b.y);
-
-      const lines = rows.map(row => {
-        const rowItems = row.items.sort((a,b) => a.x - b.x || a.index - b.index);
-        const cells = [];
-        let current = '';
-        let previousEndX = null;
-
-        rowItems.forEach(item => {
-          const gap = previousEndX == null ? 0 : item.x - previousEndX;
-          const startsNewCell = Boolean(current) && gap > 24;
-          if (startsNewCell) {
-            cells.push(current.trim());
-            current = item.text;
-          } else {
-            current = (current ? current + ' ' : '') + item.text;
-          }
-          previousEndX = Math.max(item.endX, item.x + Math.max(item.width, item.text.length * 2.5));
-        });
-
-        if (current.trim()) cells.push(current.trim());
-        return cells.join('\t');
-      }).filter(Boolean);
-
-      pageBlocks.push(lines.join('\n'));
+      const grouped = window.JNCRequestPdfLayout.groupTextItems(items, {
+        rowTolerance:4.5,
+        columnGap:80
+      });
+      pageBlocks.push(grouped.text);
     }
 
     return {
@@ -736,7 +704,7 @@ function getDashboardScope() {
       if ((fallback.confidence || 0) > (parsed.confidence || 0)) parsed = fallback;
     }
     parsed.sourceRequestFileName = file.name;
-    parsed.importBuild = '20261002.6';
+    parsed.importBuild = '20261002.7';
     parsed.extractedItemCount = extracted.itemCount;
     parsed.extractedPageCount = extracted.pages;
 
@@ -816,7 +784,7 @@ function getDashboardScope() {
 
     const html =
       '<p class="eyebrow">IMPORT PROJECT REQUEST</p>' +
-      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped · v6</strong></div>' +
+      '<div class="import-file-chip"><i data-lucide="file-text"></i><span>' + esc(fileName) + '</span><strong>' + esc(parsed.confidence) + '% mapped · v7</strong></div>' +
       '<h2>Review detected request</h2>' +
       '<p class="modal-subtitle">The PDF has been mapped to CRM fields. Check the core information, then create the Lead.</p>' +
       warningHtml +
@@ -826,7 +794,7 @@ function getDashboardScope() {
           '<summary><span>Detected request details</span><small>Project · Formulation · Packaging</small></summary>' +
           '<div class="detail-grid compact import-preview-grid">' + requestImportDetailGrid(parsed) + '</div>' +
         '</details>' +
-        '<p class="helper-text import-helper">The PDF is read locally in your browser. Parser v6 · ' + esc(parsed.extractedItemCount || 0) + ' text items · ' + esc(parsed.extractedPageCount || 0) + ' pages. The PDF file itself is not uploaded.</p>' +
+        '<p class="helper-text import-helper">The PDF is read locally in your browser. Parser v7 · ' + esc(parsed.extractedItemCount || 0) + ' text items · ' + esc(parsed.extractedPageCount || 0) + ' pages. The PDF file itself is not uploaded.</p>' +
         '<div class="modal-actions">' +
           '<button type="button" class="secondary-button" id="cancelRequestImport">Cancel</button>' +
           '<button type="submit" class="primary-button"><i data-lucide="user-plus"></i> Create Lead</button>' +
