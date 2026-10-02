@@ -69,9 +69,11 @@ async function attachDiagnostics(page, label) {
   assert(await page.locator('[data-action="import-request-pdf"]').isVisible(), 'Import Request PDF button is missing on Leads.');
   const pdfRuntime = await page.evaluate(() => ({
     pdfjs: typeof window.pdfjsLib !== 'undefined',
+    layout: typeof window.JNCRequestPdfLayout !== 'undefined',
     parser: typeof window.JNCRequestParser !== 'undefined'
   }));
   assert(pdfRuntime.pdfjs, 'PDF.js runtime did not load.');
+  assert(pdfRuntime.layout, 'JN COS request PDF layout grouper did not load.');
   assert(pdfRuntime.parser, 'JN COS request parser did not load.');
 
   const fixturePage = await browser.newPage({ viewport: { width: 1100, height: 1400 } });
