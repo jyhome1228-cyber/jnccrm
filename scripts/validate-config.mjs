@@ -14,6 +14,7 @@ const requiredFiles = [
   'app-config.js',
   'data-provider.js',
   'firebase-adapter.js',
+  'request-pdf-layout.js',
   'request-pdf-parser.js',
   'scripts/test-request-parser.mjs',
   'firestore.rules',
@@ -32,6 +33,7 @@ const scriptOrder = [
   './crm-store.js',
   './firebase-adapter.js',
   './data-provider.js',
+  './request-pdf-layout.js',
   './request-pdf-parser.js',
   './app.js'
 ];
@@ -94,3 +96,13 @@ if (!/sourceDocumentId/.test(appJs) || !/Website Request PDF/.test(appJs)) {
   throw new Error('Request PDF → Lead mapping is incomplete.');
 }
 console.log('Request PDF import checks passed.');
+
+
+const layoutJs = fs.readFileSync('request-pdf-layout.js','utf8');
+if (!/function groupTextItems/.test(layoutJs) || !/columnGap/.test(layoutJs)) {
+  throw new Error('Deterministic request PDF layout grouper is missing.');
+}
+if (!/request-pdf-layout\.js\?v=20261002-pdf7/.test(index)) {
+  throw new Error('index.html must load request-pdf-layout.js v7.');
+}
+console.log('Request PDF deterministic layout checks passed.');
