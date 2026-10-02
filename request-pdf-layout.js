@@ -4,7 +4,7 @@
   }
 
   function groupTextItems(items, options = {}) {
-    const rowTolerance = Number(options.rowTolerance || 4.5);
+    const rowTolerance = Number(options.rowTolerance || 2.2);
     const columnGap = Number(options.columnGap || 80);
 
     const normalized = (items || [])
